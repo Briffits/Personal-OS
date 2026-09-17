@@ -12,7 +12,8 @@ The core product question is:
 
 Before making architectural or product decisions, read:
 
-`PERSONAL_OS_PROJECT_OVERVIEW.md`
+`docs/PERSONAL_OS_PROJECT_OVERVIEW.md`
+`docs/MVP_SPEC.md`
 
 ---
 
