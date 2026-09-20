@@ -42,6 +42,47 @@ Do not make Expo Managed Workflow a mandatory architectural dependency unless ex
 
 ---
 
+## Engineering Philosophy — Unix/Linux Principles
+
+Personal OS should be engineered according to the Unix philosophy:
+
+> Do one thing, and do it well.
+
+This principle should guide architectural and implementation decisions throughout the project.
+
+### Build Small, Focused Components
+
+Each component, service or module should have one clear responsibility.
+
+Examples:
+
+- HealthKit service reads medication-related Health data.
+- Medication stock service calculates estimated stock.
+- Prescription storage service manages the current prescription.
+- Today priority engine determines NOW and TODAY.
+- UI components display information but should not contain unrelated business logic.
+
+Avoid large components or services that accumulate unrelated responsibilities.
+
+### Prefer Composition Over Monoliths
+
+Complex behaviour should emerge by combining simple, well-defined components.
+
+For example:
+
+```text
+HealthKit
+    ↓
+Medication Dose Events
+    ↓
+Stock Calculator
+    ↓
+Medication State
+    ↓
+Today / Prescription Wallet
+
+---
+
 ## Development Approach
 
 Work incrementally.
