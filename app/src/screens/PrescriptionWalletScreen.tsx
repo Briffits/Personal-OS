@@ -1,4 +1,6 @@
+import {useState} from 'react';
 import {
+Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,7 +18,39 @@ function PrescriptionWalletScreen({
   onBack,
 }: PrescriptionWalletScreenProps) {
   const isDarkMode = useColorScheme() === 'dark';
+const [estimatedStock, setEstimatedStock] = useState(23);
 
+const handleAddStock = () => {
+  Alert.prompt(
+    'Add Stock',
+    'Enter the number of tablets to add.',
+    [
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+      {
+        text: 'Add',
+        onPress: value => {
+          const amount = Number(value);
+
+          if (!Number.isInteger(amount) || amount <= 0) {
+            Alert.alert(
+              'Invalid amount',
+              'Enter a whole number greater than zero.',
+            );
+            return;
+          }
+
+          setEstimatedStock(currentStock => currentStock + amount);
+        },
+      },
+    ],
+    'plain-text',
+    '',
+    'number-pad',
+  );
+};
   const colours = {
     background: isDarkMode ? '#111111' : '#F7F7F7',
     surface: isDarkMode ? '#1C1C1E' : '#FFFFFF',
@@ -53,11 +87,11 @@ function PrescriptionWalletScreen({
           </Text>
 
           <Text style={[styles.stockText, {color: colours.primaryText}]}>
-            Estimated stock: 23 tablets
+            Estimated stock: {estimatedStock} tablets
           </Text>
 
           <Text style={[styles.daysText, {color: colours.secondaryText}]}>
-            Approximately 23 days remaining
+            Approximately {estimatedStock} days remaining
           </Text>
 
           <View
@@ -82,6 +116,7 @@ function PrescriptionWalletScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add Stock"
+onPress={handleAddStock}
               style={styles.actionButton}>
               <Text style={[styles.actionText, {color: colours.primaryText}]}>
                 Add Stock
