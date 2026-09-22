@@ -6,16 +6,39 @@ import BottomNavigation, {
   type AppTab,
 } from './src/components/BottomNavigation';
 import LibraryScreen from './src/screens/LibraryScreen';
+import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
 import TodayScreen from './src/screens/TodayScreen';
+
+type AppScreen = 'main' | 'prescriptionWallet';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [activeTab, setActiveTab] = useState<AppTab>('Today');
+  const [activeScreen, setActiveScreen] = useState<AppScreen>('main');
+
+  const handleTabPress = (tab: AppTab) => {
+    setActiveTab(tab);
+    setActiveScreen('main');
+  };
 
   const renderScreen = () => {
+    if (activeScreen === 'prescriptionWallet') {
+      return (
+        <PrescriptionWalletScreen
+          onBack={() => setActiveScreen('main')}
+        />
+      );
+    }
+
     switch (activeTab) {
       case 'Library':
-        return <LibraryScreen />;
+        return (
+          <LibraryScreen
+            onOpenPrescriptionWallet={() =>
+              setActiveScreen('prescriptionWallet')
+            }
+          />
+        );
       case 'Ask':
       case 'Capture':
       case 'Today':
@@ -28,7 +51,12 @@ function App() {
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       {renderScreen()}
-      <BottomNavigation activeTab={activeTab} onTabPress={setActiveTab} />
+      {activeScreen === 'main' && (
+        <BottomNavigation
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+        />
+      )}
     </SafeAreaProvider>
   );
 }

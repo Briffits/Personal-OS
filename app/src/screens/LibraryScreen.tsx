@@ -1,8 +1,13 @@
 import {Pressable, StyleSheet, Text, useColorScheme, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
-function LibraryScreen() {
-  const isDarkMode = useColorScheme() === 'dark';
+type LibraryScreenProps = {
+  onOpenPrescriptionWallet: () => void;
+};
+
+function LibraryScreen({
+  onOpenPrescriptionWallet,
+}: LibraryScreenProps) {  const isDarkMode = useColorScheme() === 'dark';
 
   const colours = {
     background: isDarkMode ? '#111111' : '#F7F7F7',
@@ -24,6 +29,7 @@ function LibraryScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open Prescription Wallet"
+onPress={onOpenPrescriptionWallet}
           style={[styles.card, {backgroundColor: colours.surface}]}>
           <Text style={[styles.cardTitle, {color: colours.primaryText}]}>
             Prescription Wallet
