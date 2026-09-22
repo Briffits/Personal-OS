@@ -1,8 +1,18 @@
 import {Pressable, StyleSheet, Text, useColorScheme, View} from 'react-native';
 
-const tabs = ['Today', 'Ask', 'Capture', 'Library'] as const;
+export type AppTab = 'Today' | 'Ask' | 'Capture' | 'Library';
 
-function BottomNavigation() {
+type BottomNavigationProps = {
+  activeTab: AppTab;
+  onTabPress: (tab: AppTab) => void;
+};
+
+const tabs: AppTab[] = ['Today', 'Ask', 'Capture', 'Library'];
+
+function BottomNavigation({
+  activeTab,
+  onTabPress,
+}: BottomNavigationProps) {
   const isDarkMode = useColorScheme() === 'dark';
 
   const colours = {
@@ -22,7 +32,7 @@ function BottomNavigation() {
         },
       ]}>
       {tabs.map(tab => {
-        const isActive = tab === 'Today';
+        const isActive = tab === activeTab;
 
         return (
           <Pressable
@@ -30,6 +40,7 @@ function BottomNavigation() {
             accessibilityRole="button"
             accessibilityState={{selected: isActive}}
             accessibilityLabel={`${tab} tab`}
+            onPress={() => onTabPress(tab)}
             style={styles.tab}>
             <Text
               style={[

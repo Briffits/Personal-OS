@@ -1,6 +1,5 @@
 import {ScrollView, StyleSheet, Text, useColorScheme, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import BottomNavigation from '../components/BottomNavigation';
 
 function TodayScreen() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -61,7 +60,6 @@ function TodayScreen() {
         </View>
       </ScrollView>
 
-      <BottomNavigation />
     </SafeAreaView>
   );
 }
