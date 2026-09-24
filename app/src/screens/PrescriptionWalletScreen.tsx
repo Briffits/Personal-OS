@@ -33,16 +33,23 @@ function PrescriptionWalletScreen({
   const theme = usePersonalOSTheme();
   const {width: screenWidth} = useWindowDimensions();
 
-  const [estimatedStock, setEstimatedStock] = useState(23);
+  const [estimatedStock, setEstimatedStock] = useState<number | null>(null);
+  const [isStockLoading, setIsStockLoading] = useState(true);
 
   const horizontalPadding = goldenScreenPadding(screenWidth);
 
   useEffect(() => {
     const loadSavedStock = async () => {
-      const savedStock = await loadMedicationStock();
-
-      if (savedStock !== null) {
+      try {
+        const savedStock = await loadMedicationStock();
         setEstimatedStock(savedStock);
+      } catch {
+        Alert.alert(
+          'Unable to load stock',
+          'Your saved stock amount could not be loaded.',
+        );
+      } finally {
+        setIsStockLoading(false);
       }
     };
 
@@ -83,7 +90,7 @@ function PrescriptionWalletScreen({
               return;
             }
 
-            updateStock(estimatedStock + amount);
+            updateStock((estimatedStock ?? 0) + amount);
           },
         },
       ],
@@ -187,7 +194,11 @@ function PrescriptionWalletScreen({
                 color: theme.colours.textPrimary,
               },
             ]}>
-            Estimated stock: {estimatedStock} tablets
+            {isStockLoading
+              ? 'Loading stock…'
+              : estimatedStock === null
+                ? 'Stock not recorded'
+                : `Estimated stock: ${estimatedStock} tablets`}
           </Text>
 
           <Text
@@ -197,7 +208,11 @@ function PrescriptionWalletScreen({
                 color: theme.colours.textSecondary,
               },
             ]}>
-            Approximately {estimatedStock} days remaining
+            {isStockLoading
+              ? 'Checking saved stock'
+              : estimatedStock === null
+                ? 'Add stock to begin tracking'
+                : `Approximately ${estimatedStock} days remaining`}
           </Text>
 
           <View
