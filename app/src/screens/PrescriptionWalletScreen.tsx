@@ -65,6 +65,37 @@ function PrescriptionWalletScreen({
     );
   };
 
+  const handleCorrectStock = () => {
+    Alert.prompt(
+      'Correct Stock',
+      'Enter the current number of tablets you physically have.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Update',
+          onPress: value => {
+            const amount = Number(value);
+
+            if (!Number.isInteger(amount) || amount < 0) {
+              Alert.alert(
+                'Invalid amount',
+                'Enter a whole number of zero or more.',
+              );
+              return;
+            }
+
+            setEstimatedStock(amount);
+          },
+        },
+      ],
+      'plain-text',
+'',
+      'number-pad',
+    );
+  };
   return (
     <SafeAreaView
       style={[
@@ -185,6 +216,7 @@ function PrescriptionWalletScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Correct Stock"
+              onPress={handleCorrectStock}
               style={styles.actionButton}>
               <Text
                 style={[
