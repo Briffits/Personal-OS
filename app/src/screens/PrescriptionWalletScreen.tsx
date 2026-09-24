@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {
   Alert,
   Pressable,
@@ -18,6 +18,10 @@ import {
   typography,
   usePersonalOSTheme,
 } from '../design-system';
+import {
+  loadMedicationStock,
+  saveMedicationStock,
+} from '../storage/medicationStockStorage';
 
 type PrescriptionWalletScreenProps = {
   onBack: () => void;
@@ -32,6 +36,30 @@ function PrescriptionWalletScreen({
   const [estimatedStock, setEstimatedStock] = useState(23);
 
   const horizontalPadding = goldenScreenPadding(screenWidth);
+
+  useEffect(() => {
+    const loadSavedStock = async () => {
+      const savedStock = await loadMedicationStock();
+
+      if (savedStock !== null) {
+        setEstimatedStock(savedStock);
+      }
+    };
+
+    loadSavedStock();
+  }, []);
+
+  const updateStock = async (newStock: number) => {
+    try {
+      await saveMedicationStock(newStock);
+      setEstimatedStock(newStock);
+    } catch {
+      Alert.alert(
+        'Unable to save stock',
+        'Your stock amount could not be saved. Please try again.',
+      );
+    }
+  };
 
   const handleAddStock = () => {
     Alert.prompt(
@@ -55,7 +83,7 @@ function PrescriptionWalletScreen({
               return;
             }
 
-            setEstimatedStock(currentStock => currentStock + amount);
+            updateStock(estimatedStock + amount);
           },
         },
       ],
@@ -87,12 +115,12 @@ function PrescriptionWalletScreen({
               return;
             }
 
-            setEstimatedStock(amount);
+            updateStock(amount);
           },
         },
       ],
       'plain-text',
-'',
+      '',
       'number-pad',
     );
   };
