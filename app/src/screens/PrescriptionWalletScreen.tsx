@@ -1,14 +1,23 @@
 import {useState} from 'react';
 import {
-Alert,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  useColorScheme,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+
+import AppCard from '../design-system/components/AppCard';
+import {
+  goldenScreenPadding,
+  layout,
+  spacing,
+  typography,
+  usePersonalOSTheme,
+} from '../design-system';
 
 type PrescriptionWalletScreenProps = {
   onBack: () => void;
@@ -17,80 +26,118 @@ type PrescriptionWalletScreenProps = {
 function PrescriptionWalletScreen({
   onBack,
 }: PrescriptionWalletScreenProps) {
-  const isDarkMode = useColorScheme() === 'dark';
-const [estimatedStock, setEstimatedStock] = useState(23);
+  const theme = usePersonalOSTheme();
+  const {width: screenWidth} = useWindowDimensions();
 
-const handleAddStock = () => {
-  Alert.prompt(
-    'Add Stock',
-    'Enter the number of tablets to add.',
-    [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Add',
-        onPress: value => {
-          const amount = Number(value);
+  const [estimatedStock, setEstimatedStock] = useState(23);
 
-          if (!Number.isInteger(amount) || amount <= 0) {
-            Alert.alert(
-              'Invalid amount',
-              'Enter a whole number greater than zero.',
-            );
-            return;
-          }
+  const horizontalPadding = goldenScreenPadding(screenWidth);
 
-          setEstimatedStock(currentStock => currentStock + amount);
+  const handleAddStock = () => {
+    Alert.prompt(
+      'Add Stock',
+      'Enter the number of tablets to add.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
         },
-      },
-    ],
-    'plain-text',
-    '',
-    'number-pad',
-  );
-};
-  const colours = {
-    background: isDarkMode ? '#111111' : '#F7F7F7',
-    surface: isDarkMode ? '#1C1C1E' : '#FFFFFF',
-    primaryText: isDarkMode ? '#FFFFFF' : '#111111',
-    secondaryText: isDarkMode ? '#A1A1A6' : '#666666',
-    border: isDarkMode ? '#2C2C2E' : '#E5E5EA',
+        {
+          text: 'Add',
+          onPress: value => {
+            const amount = Number(value);
+
+            if (!Number.isInteger(amount) || amount <= 0) {
+              Alert.alert(
+                'Invalid amount',
+                'Enter a whole number greater than zero.',
+              );
+              return;
+            }
+
+            setEstimatedStock(currentStock => currentStock + amount);
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'number-pad',
+    );
   };
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, {backgroundColor: colours.background}]}>
+      style={[
+        styles.safeArea,
+        {
+          backgroundColor: theme.colours.background,
+        },
+      ]}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingHorizontal: horizontalPadding,
+          },
+        ]}
         showsVerticalScrollIndicator={false}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to Library"
           onPress={onBack}
           style={styles.backButton}>
-          <Text style={[styles.backText, {color: colours.secondaryText}]}>
+          <Text
+            style={[
+              typography.bodyStrong,
+              {
+                color: theme.colours.primary,
+              },
+            ]}>
             Back
           </Text>
         </Pressable>
 
         <Text
           accessibilityRole="header"
-          style={[styles.title, {color: colours.primaryText}]}>
+          style={[
+            typography.screenTitle,
+            styles.title,
+            {
+              color: theme.colours.textPrimary,
+            },
+          ]}>
           Prescription Wallet
         </Text>
 
-        <View style={[styles.card, {backgroundColor: colours.surface}]}>
-          <Text style={[styles.medicationName, {color: colours.primaryText}]}>
+        <AppCard>
+          <Text
+            style={[
+              styles.medicationName,
+              {
+                color: theme.colours.textPrimary,
+              },
+            ]}>
             Medication A
           </Text>
 
-          <Text style={[styles.stockText, {color: colours.primaryText}]}>
+          <Text
+            style={[
+              typography.cardTitle,
+              styles.stockText,
+              {
+                color: theme.colours.textPrimary,
+              },
+            ]}>
             Estimated stock: {estimatedStock} tablets
           </Text>
 
-          <Text style={[styles.daysText, {color: colours.secondaryText}]}>
+          <Text
+            style={[
+              typography.body,
+              {
+                color: theme.colours.textSecondary,
+              },
+            ]}>
             Approximately {estimatedStock} days remaining
           </Text>
 
@@ -98,7 +145,7 @@ const handleAddStock = () => {
             style={[
               styles.divider,
               {
-                backgroundColor: colours.border,
+                backgroundColor: theme.colours.primarySubtle,
               },
             ]}
           />
@@ -108,7 +155,13 @@ const handleAddStock = () => {
               accessibilityRole="button"
               accessibilityLabel="View Prescription"
               style={styles.actionButton}>
-              <Text style={[styles.actionText, {color: colours.primaryText}]}>
+              <Text
+                style={[
+                  typography.bodyStrong,
+                  {
+                    color: theme.colours.primary,
+                  },
+                ]}>
                 View Prescription
               </Text>
             </Pressable>
@@ -116,9 +169,15 @@ const handleAddStock = () => {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add Stock"
-onPress={handleAddStock}
+              onPress={handleAddStock}
               style={styles.actionButton}>
-              <Text style={[styles.actionText, {color: colours.primaryText}]}>
+              <Text
+                style={[
+                  typography.bodyStrong,
+                  {
+                    color: theme.colours.primary,
+                  },
+                ]}>
                 Add Stock
               </Text>
             </Pressable>
@@ -127,14 +186,27 @@ onPress={handleAddStock}
               accessibilityRole="button"
               accessibilityLabel="Correct Stock"
               style={styles.actionButton}>
-              <Text style={[styles.actionText, {color: colours.primaryText}]}>
+              <Text
+                style={[
+                  typography.bodyStrong,
+                  {
+                    color: theme.colours.primary,
+                  },
+                ]}>
                 Correct Stock
               </Text>
             </Pressable>
           </View>
-        </View>
+        </AppCard>
 
-        <Text style={[styles.note, {color: colours.secondaryText}]}>
+        <Text
+          style={[
+            typography.caption,
+            styles.note,
+            {
+              color: theme.colours.textSecondary,
+            },
+          ]}>
           Stock and prescription actions are placeholders for now.
         </Text>
       </ScrollView>
@@ -147,61 +219,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
+    paddingBottom: spacing.xxl,
   },
   backButton: {
     alignSelf: 'flex-start',
-    minHeight: 44,
+    minHeight: layout.minimumTouchTarget,
     justifyContent: 'center',
   },
-  backText: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
   title: {
-    fontSize: 30,
-    fontWeight: '700',
-    marginTop: 8,
-    marginBottom: 32,
-  },
-  card: {
-    borderRadius: 16,
-    padding: 18,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xxl,
   },
   medicationName: {
     fontSize: 20,
+    lineHeight: 26,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   stockText: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  daysText: {
-    fontSize: 15,
-    lineHeight: 21,
+    marginBottom: spacing.sm,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: 18,
+    marginVertical: spacing.lg,
   },
   actions: {
-    gap: 8,
+    gap: spacing.sm,
   },
   actionButton: {
-    minHeight: 44,
+    minHeight: layout.minimumTouchTarget,
     justifyContent: 'center',
   },
-  actionText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
   note: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 16,
+    marginTop: spacing.lg,
   },
 });
 

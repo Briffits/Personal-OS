@@ -1,4 +1,18 @@
-import {Pressable, StyleSheet, Text, useColorScheme, View} from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
+import {
+  goldenControlHeight,
+  spacing,
+  typography,
+  usePersonalOSTheme,
+} from '../design-system';
 
 export type AppTab = 'Today' | 'Ask' | 'Capture' | 'Library';
 
@@ -13,22 +27,19 @@ function BottomNavigation({
   activeTab,
   onTabPress,
 }: BottomNavigationProps) {
-  const isDarkMode = useColorScheme() === 'dark';
+  const theme = usePersonalOSTheme();
+  const insets = useSafeAreaInsets();
+  const {width: screenWidth} = useWindowDimensions();
 
-  const colours = {
-    background: isDarkMode ? '#1C1C1E' : '#FFFFFF',
-    activeText: isDarkMode ? '#FFFFFF' : '#111111',
-    inactiveText: isDarkMode ? '#8E8E93' : '#8A8A8E',
-    border: isDarkMode ? '#2C2C2E' : '#E5E5EA',
-  };
+  const controlHeight = goldenControlHeight(screenWidth);
 
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: colours.background,
-          borderTopColor: colours.border,
+          backgroundColor: theme.colours.surface,
+          paddingBottom: Math.max(insets.bottom, spacing.sm),
         },
       ]}>
       {tabs.map(tab => {
@@ -41,16 +52,22 @@ function BottomNavigation({
             accessibilityState={{selected: isActive}}
             accessibilityLabel={`${tab} tab`}
             onPress={() => onTabPress(tab)}
-            style={styles.tab}>
+            style={[
+              styles.tab,
+              {
+                minHeight: controlHeight,
+              },
+            ]}>
             <Text
               style={[
-                styles.label,
+                isActive
+                  ? typography.navigationActive
+                  : typography.navigation,
                 {
                   color: isActive
-                    ? colours.activeText
-                    : colours.inactiveText,
+                    ? theme.colours.primary
+                    : theme.colours.textSecondary,
                 },
-                isActive && styles.activeLabel,
               ]}>
               {tab}
             </Text>
@@ -64,23 +81,13 @@ function BottomNavigation({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
   },
   tab: {
     flex: 1,
-    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  activeLabel: {
-    fontWeight: '700',
   },
 });
 

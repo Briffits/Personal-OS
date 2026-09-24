@@ -1,5 +1,19 @@
-import {Pressable, StyleSheet, Text, useColorScheme, View} from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+
+import AppCard from '../design-system/components/AppCard';
+import {
+  goldenScreenPadding,
+  spacing,
+  typography,
+  usePersonalOSTheme,
+} from '../design-system';
 
 type LibraryScreenProps = {
   onOpenPrescriptionWallet: () => void;
@@ -7,37 +21,66 @@ type LibraryScreenProps = {
 
 function LibraryScreen({
   onOpenPrescriptionWallet,
-}: LibraryScreenProps) {  const isDarkMode = useColorScheme() === 'dark';
+}: LibraryScreenProps) {
+  const theme = usePersonalOSTheme();
+  const {width: screenWidth} = useWindowDimensions();
 
-  const colours = {
-    background: isDarkMode ? '#111111' : '#F7F7F7',
-    surface: isDarkMode ? '#1C1C1E' : '#FFFFFF',
-    primaryText: isDarkMode ? '#FFFFFF' : '#111111',
-    secondaryText: isDarkMode ? '#A1A1A6' : '#666666',
-  };
+  const horizontalPadding = goldenScreenPadding(screenWidth);
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, {backgroundColor: colours.background}]}>
-      <View style={styles.content}>
+      style={[
+        styles.safeArea,
+        {
+          backgroundColor: theme.colours.background,
+        },
+      ]}>
+      <View
+        style={[
+          styles.content,
+          {
+            paddingHorizontal: horizontalPadding,
+          },
+        ]}>
         <Text
           accessibilityRole="header"
-          style={[styles.title, {color: colours.primaryText}]}>
+          style={[
+            typography.screenTitle,
+            styles.title,
+            {
+              color: theme.colours.textPrimary,
+            },
+          ]}>
           Library
         </Text>
 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open Prescription Wallet"
-onPress={onOpenPrescriptionWallet}
-          style={[styles.card, {backgroundColor: colours.surface}]}>
-          <Text style={[styles.cardTitle, {color: colours.primaryText}]}>
-            Prescription Wallet
-          </Text>
+          onPress={onOpenPrescriptionWallet}
+          style={styles.walletEntry}>
+          <AppCard>
+            <Text
+              style={[
+                typography.cardTitle,
+                styles.cardTitle,
+                {
+                  color: theme.colours.textPrimary,
+                },
+              ]}>
+              Prescription Wallet
+            </Text>
 
-          <Text style={[styles.cardText, {color: colours.secondaryText}]}>
-            View your current prescription and manage medication stock.
-          </Text>
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: theme.colours.textSecondary,
+                },
+              ]}>
+              View your current prescription and manage medication stock.
+            </Text>
+          </AppCard>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -50,25 +93,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
   },
   title: {
-    fontSize: 30,
-    fontWeight: '700',
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
   },
-  card: {
-    borderRadius: 16,
-    padding: 18,
+  walletEntry: {
+    width: '100%',
   },
   cardTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  cardText: {
-    fontSize: 15,
-    lineHeight: 21,
+    marginBottom: spacing.sm,
   },
 });
 
