@@ -212,7 +212,7 @@ function PrescriptionWalletScreen({
               ? 'Checking saved stock'
               : estimatedStock === null
                 ? 'Add stock to begin tracking'
-                : `Approximately ${estimatedStock} days remaining`}
+                : 'Stock quantity recorded'}
           </Text>
 
           <View
