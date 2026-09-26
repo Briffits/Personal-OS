@@ -69,6 +69,10 @@ function PrescriptionWalletScreen({
   };
 
   const handleAddStock = () => {
+    if (isStockLoading) {
+      return;
+    }
+
     Alert.prompt(
       'Add Stock',
       'Enter the number of tablets to add.',
@@ -101,6 +105,10 @@ function PrescriptionWalletScreen({
   };
 
   const handleCorrectStock = () => {
+    if (isStockLoading) {
+      return;
+    }
+
     Alert.prompt(
       'Correct Stock',
       'Enter the current number of tablets you physically have.',
@@ -112,9 +120,10 @@ function PrescriptionWalletScreen({
         {
           text: 'Update',
           onPress: value => {
-            const amount = Number(value);
+            const input = value?.trim() ?? '';
+            const amount = Number(input);
 
-            if (!Number.isInteger(amount) || amount < 0) {
+            if (input === '' || !Number.isInteger(amount) || amount < 0) {
               Alert.alert(
                 'Invalid amount',
                 'Enter a whole number of zero or more.',
@@ -243,6 +252,8 @@ function PrescriptionWalletScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add Stock"
+              accessibilityState={{disabled: isStockLoading}}
+              disabled={isStockLoading}
               onPress={handleAddStock}
               style={styles.actionButton}>
               <Text
@@ -259,6 +270,8 @@ function PrescriptionWalletScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Correct Stock"
+              accessibilityState={{disabled: isStockLoading}}
+              disabled={isStockLoading}
               onPress={handleCorrectStock}
               style={styles.actionButton}>
               <Text
@@ -282,7 +295,9 @@ function PrescriptionWalletScreen({
               color: theme.colours.textSecondary,
             },
           ]}>
-          Stock and prescription actions are placeholders for now.
+          Stock is saved on this device. Add stock when you receive tablets, or
+          correct it to match your current count. Prescription viewing is not yet
+          available.
         </Text>
       </ScrollView>
     </SafeAreaView>
