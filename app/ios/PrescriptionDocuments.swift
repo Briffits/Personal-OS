@@ -64,7 +64,31 @@ final class PrescriptionDocuments: NSObject {
     _ resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock
   ) {
-    rejectNotImplemented(reject)
+    do {
+      let state = try storage.readState()
+
+      guard let pendingCleanup = state.pendingCleanup else {
+        resolve(nil)
+        return
+      }
+
+      try storage.removeDocumentContainer(for: pendingCleanup)
+
+      let cleanedState = PrescriptionDocumentState(
+        current: state.current,
+        pendingCleanup: nil
+      )
+
+      try storage.writeState(cleanedState)
+
+      resolve(nil)
+    } catch {
+      reject(
+        "prescription_documents_cleanup_failed",
+        "Unable to clean up the superseded prescription document.",
+        nil
+      )
+    }
   }
 
   @objc(release:resolver:rejecter:)
