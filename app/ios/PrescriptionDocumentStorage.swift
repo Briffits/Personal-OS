@@ -27,12 +27,14 @@ struct PrescriptionDocumentState: Codable, Equatable {
 
 enum PrescriptionDocumentStorageError: Error {
   case invalidState
+  case invalidIdentifier
 }
 
 final class PrescriptionDocumentStorage {
 
   private static let directoryName = "PrescriptionDocuments"
   private static let stateFileName = "state.json"
+  private static let documentContainersDirectoryName = "documents"
 
   private let fileManager: FileManager
 
@@ -98,7 +100,47 @@ final class PrescriptionDocumentStorage {
 
     return directory
   }
+  func documentContainerURL(for identifier: String) throws -> URL {
+    guard UUID(uuidString: identifier) != nil else {
+      throw PrescriptionDocumentStorageError.invalidIdentifier
+    }
 
+    return try documentContainersDirectory()
+      .appendingPathComponent(identifier, isDirectory: true)
+  }
+
+  func removeDocumentContainer(for identifier: String) throws {
+    let container = try documentContainerURL(for: identifier)
+
+    guard fileManager.fileExists(atPath: container.path) else {
+      return
+    }
+
+    try fileManager.removeItem(at: container)
+  }
+
+  private func documentContainersDirectory() throws -> URL {
+    let directory = try documentsDirectory()
+      .appendingPathComponent(
+        Self.documentContainersDirectoryName,
+        isDirectory: true
+      )
+
+    if !fileManager.fileExists(atPath: directory.path) {
+      try fileManager.createDirectory(
+        at: directory,
+        withIntermediateDirectories: true,
+        attributes: [
+          .protectionKey: FileProtectionType.complete,
+        ]
+      )
+    }
+
+    try applyFileProtection(to: directory)
+    try excludeFromBackup(directory)
+
+    return directory
+  }
   private func stateFileURL() throws -> URL {
     try documentsDirectory()
       .appendingPathComponent(Self.stateFileName, isDirectory: false)
