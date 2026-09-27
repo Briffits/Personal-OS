@@ -35,7 +35,7 @@ final class PrescriptionDocumentStorage {
   private static let directoryName = "PrescriptionDocuments"
   private static let stateFileName = "state.json"
   private static let documentContainersDirectoryName = "documents"
-
+  private static let candidateContainersDirectoryName = "candidates"
   private let fileManager: FileManager
 
   init(fileManager: FileManager = .default) {
@@ -119,10 +119,52 @@ final class PrescriptionDocumentStorage {
     try fileManager.removeItem(at: container)
   }
 
+  func candidateContainerURL(for identifier: String) throws -> URL {
+    guard UUID(uuidString: identifier) != nil else {
+      throw PrescriptionDocumentStorageError.invalidIdentifier
+    }
+
+    return try candidateContainersDirectory()
+      .appendingPathComponent(identifier, isDirectory: true)
+  }
+
+  func removeCandidateContainer(for identifier: String) throws {
+    let container = try candidateContainerURL(for: identifier)
+
+    guard fileManager.fileExists(atPath: container.path) else {
+      return
+    }
+
+    try fileManager.removeItem(at: container)
+  }
+
   private func documentContainersDirectory() throws -> URL {
     let directory = try documentsDirectory()
       .appendingPathComponent(
         Self.documentContainersDirectoryName,
+        isDirectory: true
+      )
+
+    if !fileManager.fileExists(atPath: directory.path) {
+      try fileManager.createDirectory(
+        at: directory,
+        withIntermediateDirectories: true,
+        attributes: [
+          .protectionKey: FileProtectionType.complete,
+        ]
+      )
+    }
+
+    try applyFileProtection(to: directory)
+    try excludeFromBackup(directory)
+
+    return directory
+  }
+
+  private func candidateContainersDirectory() throws -> URL {
+    let directory = try documentsDirectory()
+      .appendingPathComponent(
+        Self.candidateContainersDirectoryName,
         isDirectory: true
       )
 
