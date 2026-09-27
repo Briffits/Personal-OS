@@ -97,9 +97,17 @@ final class PrescriptionDocuments: NSObject {
     resolver resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock
   ) {
-    rejectNotImplemented(reject)
+    do {
+      try storage.removeCandidateContainer(for: candidate)
+      resolve(nil)
+    } catch {
+      reject(
+        "prescription_documents_release_failed",
+        "Unable to release the temporary prescription document.",
+        nil
+      )
+    }
   }
-
   @objc(open:resolver:rejecter:)
   func open(
     _ current: String,
