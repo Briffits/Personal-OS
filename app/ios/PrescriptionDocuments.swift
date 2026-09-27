@@ -4,6 +4,8 @@ import React
 @objc(PrescriptionDocuments)
 final class PrescriptionDocuments: NSObject {
 
+  private let storage = PrescriptionDocumentStorage()
+
   @objc
   static func requiresMainQueueSetup() -> Bool {
     false
@@ -39,7 +41,22 @@ final class PrescriptionDocuments: NSObject {
     _ resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock
   ) {
-    rejectNotImplemented(reject)
+    do {
+      let state = try storage.readState()
+
+      let payload: [String: Any] = [
+        "current": state.current.map { $0 as Any } ?? NSNull(),
+        "pendingCleanup": state.pendingCleanup.map { $0 as Any } ?? NSNull(),
+      ]
+
+      resolve(payload)
+    } catch {
+      reject(
+        "prescription_documents_read_failed",
+        "Unable to read prescription document state.",
+        nil
+      )
+    }
   }
 
   @objc(cleanup:rejecter:)
