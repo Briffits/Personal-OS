@@ -23,10 +23,45 @@ import {
   saveMedicationStock,
 } from '../storage/medicationStockStorage';
 
+import {
+  createCurrentPrescriptionService,
+  PrescriptionOperationError,
+} from '../prescriptions/currentPrescriptionService';
+import {NativePrescriptionDocuments} from '../native/NativePrescriptionDocuments';
+function confirmPrescriptionReplacement(): Promise<boolean> {
+  return new Promise(resolve => {
+    Alert.alert(
+      'Replace Prescription',
+      'This will replace the prescription currently stored in Personal OS.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => resolve(false),
+        },
+        {
+          text: 'Replace',
+          style: 'destructive',
+          onPress: () => resolve(true),
+        },
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => resolve(false),
+      },
+    );
+  });
+}
+const prescriptionService = createCurrentPrescriptionService({
+  store: NativePrescriptionDocuments,
+  selector: NativePrescriptionDocuments,
+  viewer: NativePrescriptionDocuments,
+  confirmReplacement: confirmPrescriptionReplacement,
+});
+
 type PrescriptionWalletScreenProps = {
   onBack: () => void;
 };
-
 function PrescriptionWalletScreen({
   onBack,
 }: PrescriptionWalletScreenProps) {
@@ -140,6 +175,70 @@ function PrescriptionWalletScreen({
       'number-pad',
     );
   };
+
+  const handlePrescriptionAction = async () => {
+    try {
+      const viewResult = await prescriptionService.viewPrescription();
+
+      if (viewResult === 'opened') {
+        return;
+      }
+
+      const result = await prescriptionService.importPrescription();
+
+      if (result.status === 'saved') {
+        Alert.alert(
+          'Prescription saved',
+          'Your prescription is now stored in Personal OS.',
+        );
+        return;
+      }
+
+      if (result.status === 'cleanup-pending') {
+        Alert.alert(
+          'Prescription saved',
+          'Your new prescription was saved, but Personal OS still needs to finish cleaning up the previous copy.',
+        );
+        return;
+      }
+
+if (result.status === 'candidate-release-failed') {
+  const prescriptionWasSaved =
+    result.outcome.status === 'saved' ||
+    result.outcome.status === 'cleanup-pending';
+
+  Alert.alert(
+    prescriptionWasSaved
+      ? 'Prescription saved'
+      : 'Temporary file cleanup incomplete',
+    prescriptionWasSaved
+      ? 'Your prescription was saved, but some temporary file cleanup could not finish.'
+      : 'Personal OS could not remove its temporary import copy.',
+  );
+  return;
+}
+
+      if (result.status === 'failed') {
+        Alert.alert(
+          'Unable to save prescription',
+          'Personal OS could not complete the prescription import.',
+        );
+      }
+    } catch (error) {
+      if (
+        error instanceof PrescriptionOperationError &&
+        error.code === 'busy'
+      ) {
+        return;
+      }
+
+      Alert.alert(
+        'Unable to open prescription',
+        'Personal OS could not access the prescription wallet.',
+      );
+    }
+  };
+
   return (
     <SafeAreaView
       style={[
@@ -237,6 +336,7 @@ function PrescriptionWalletScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="View Prescription"
+              onPress={handlePrescriptionAction}
               style={styles.actionButton}>
               <Text
                 style={[
@@ -295,9 +395,9 @@ function PrescriptionWalletScreen({
               color: theme.colours.textSecondary,
             },
           ]}>
-          Stock is saved on this device. Add stock when you receive tablets, or
-          correct it to match your current count. Prescription viewing is not yet
-          available.
+		Stock is saved on this device. Add stock when you receive tablets, or
+		correct it to match your current count. Your current prescription is stored
+		privately on this device.
         </Text>
       </ScrollView>
     </SafeAreaView>

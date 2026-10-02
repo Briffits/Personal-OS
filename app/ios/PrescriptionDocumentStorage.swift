@@ -29,6 +29,7 @@ enum PrescriptionDocumentStorageError: Error {
     case invalidState
     case invalidIdentifier
     case candidateMissing
+    case documentMissing
     case cleanupPending
     case unsupportedDocument
 }
@@ -111,7 +112,23 @@ final class PrescriptionDocumentStorage {
     return try documentContainersDirectory()
       .appendingPathComponent(identifier, isDirectory: true)
   }
+  func documentURL(for identifier: String) throws -> URL {
+    let container = try documentContainerURL(for: identifier)
 
+    let supportedFiles = [
+      container.appendingPathComponent("document.pdf"),
+      container.appendingPathComponent("document.jpg"),
+      container.appendingPathComponent("document.png"),
+    ]
+
+    guard let document = supportedFiles.first(
+      where: { fileManager.fileExists(atPath: $0.path) }
+    ) else {
+      throw PrescriptionDocumentStorageError.documentMissing
+    }
+
+    return document
+  }
   func removeDocumentContainer(for identifier: String) throws {
     let container = try documentContainerURL(for: identifier)
 

@@ -2,11 +2,13 @@ import Foundation
 import React
 import UIKit
 import UniformTypeIdentifiers
+import QuickLook
 
 @objc(PrescriptionDocuments)
-final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate {
+final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreviewControllerDataSource {
 
   private let storage = PrescriptionDocumentStorage()
+  private var previewURL: URL?
   private var pendingSelectResolve: RCTPromiseResolveBlock?
   private var pendingSelectReject: RCTPromiseRejectBlock?
 
@@ -176,10 +178,75 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate {
   @objc(open:resolver:rejecter:)
   func open(
     _ current: String,
-    resolver resolve: RCTPromiseResolveBlock,
-    rejecter reject: RCTPromiseRejectBlock
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    rejectNotImplemented(reject)
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self else {
+        DispatchQueue.main.async {
+          reject(
+            "prescription_documents_open_failed",
+            "Unable to open the prescription document.",
+            nil
+          )
+        }
+        return
+      }
+
+      do {
+        let state = try self.storage.readState()
+
+        guard state.current == current else {
+          throw PrescriptionDocumentStorageError.documentMissing
+        }
+
+        let documentURL = try self.storage.documentURL(for: current)
+
+        DispatchQueue.main.async {
+          guard let presenter = self.presentingViewController() else {
+            reject(
+              "prescription_documents_open_failed",
+              "Unable to open the prescription document.",
+              nil
+            )
+            return
+          }
+
+          self.previewURL = documentURL
+
+          let previewController = QLPreviewController()
+          previewController.dataSource = self
+
+          presenter.present(previewController, animated: true) {
+            resolve(nil)
+          }
+        }
+      } catch {
+        DispatchQueue.main.async {
+          reject(
+            "prescription_documents_open_failed",
+            "Unable to open the prescription document.",
+            nil
+          )
+        }
+      }
+    }
+  }
+  func numberOfPreviewItems(
+    in controller: QLPreviewController
+  ) -> Int {
+    previewURL == nil ? 0 : 1
+  }
+
+  func previewController(
+    _ controller: QLPreviewController,
+    previewItemAt index: Int
+  ) -> QLPreviewItem {
+    guard index == 0, let previewURL else {
+      preconditionFailure("Quick Look requested an unavailable prescription document.")
+    }
+
+    return previewURL as NSURL
   }
   func documentPicker(
     _ controller: UIDocumentPickerViewController,
