@@ -239,7 +239,74 @@ if (result.status === 'candidate-release-failed') {
     }
   };
 
-  return (
+  const handleReplacePrescription = async () => {
+    try {
+        const result = await prescriptionService.importPrescription();
+
+        if (result.status === 'saved') {
+        Alert.alert(
+        'Prescription saved',
+        'Your current prescription has been updated.',
+      );
+      return;
+    }
+
+    if (result.status === 'cleanup-pending') {
+      Alert.alert(
+        'Prescription saved',
+        'Your new prescription was saved, but Personal OS still needs to finish cleaning up the previous copy.',
+      );
+      return;
+    }
+
+    if (result.status === 'candidate-release-failed') {
+      const prescriptionWasSaved =
+        result.outcome.status === 'saved' ||
+        result.outcome.status === 'cleanup-pending';
+
+      Alert.alert(
+        prescriptionWasSaved
+          ? 'Prescription saved'
+          : 'Temporary file cleanup incomplete',
+        prescriptionWasSaved
+          ? 'Your prescription was saved, but some temporary file cleanup could not finish.'
+          : 'Personal OS could not remove its temporary import copy.',
+      );
+      return;
+    }
+
+    if (result.status === 'failed') {
+      Alert.alert(
+        'Unable to save prescription',
+        'Personal OS could not complete the prescription import.',
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof PrescriptionOperationError &&
+      error.code === 'busy'
+    ) {
+      return;
+    }
+
+    if (
+      error instanceof PrescriptionOperationError &&
+      error.code === 'cleanup-pending'
+    ) {
+      Alert.alert(
+        'Cleanup required',
+        'Personal OS must finish cleaning up the previous prescription before another replacement can be made.',
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Unable to replace prescription',
+      'Personal OS could not start the prescription replacement.',
+    );
+  }
+};
+return (
     <SafeAreaView
       style={[
         styles.safeArea,
@@ -351,6 +418,22 @@ if (result.status === 'candidate-release-failed') {
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Replace Prescription"
+              onPress={handleReplacePrescription}
+              style={styles.actionButton}>
+              <Text
+                style={[
+                  typography.bodyStrong,
+                  {
+                    color: theme.colours.primary,
+                  },
+                ]}>
+                Replace Prescription
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Add Stock"
               accessibilityState={{disabled: isStockLoading}}
               disabled={isStockLoading}
@@ -395,9 +478,9 @@ if (result.status === 'candidate-release-failed') {
               color: theme.colours.textSecondary,
             },
           ]}>
-		Stock is saved on this device. Add stock when you receive tablets, or
-		correct it to match your current count. Your current prescription is stored
-		privately on this device.
+    Stock is saved on this device. Add stock when you receive tablets, or
+    correct it to match your current count. Your current prescription is stored
+    privately on this device.
         </Text>
       </ScrollView>
     </SafeAreaView>
