@@ -238,8 +238,13 @@ final class PrescriptionDocumentStorage {
 
     do {
       try fileManager.copyItem(at: candidate, to: destination)
+
+      let committedDocument = try documentURL(for: newIdentifier)
+
       try applyFileProtection(to: destination)
+      try applyFileProtection(to: committedDocument)
       try excludeFromBackup(destination)
+      try excludeFromBackup(committedDocument)
 
       let committedState = PrescriptionDocumentState(
         current: newIdentifier,
