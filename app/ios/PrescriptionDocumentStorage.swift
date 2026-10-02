@@ -257,7 +257,31 @@ final class PrescriptionDocumentStorage {
       throw error
     }
   }
+  func cleanupOrphanedCandidates() throws {
+    let directory = try candidateContainersDirectory()
 
+    let candidates = try fileManager.contentsOfDirectory(
+      at: directory,
+      includingPropertiesForKeys: nil,
+      options: []
+    )
+
+    var firstError: Error?
+
+    for candidate in candidates {
+      do {
+        try fileManager.removeItem(at: candidate)
+      } catch {
+        if firstError == nil {
+          firstError = error
+        }
+      }
+    }
+
+    if let firstError {
+      throw firstError
+    }
+  }
   private func documentContainersDirectory() throws -> URL {
     let directory = try documentsDirectory()
       .appendingPathComponent(

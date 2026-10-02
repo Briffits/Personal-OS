@@ -11,7 +11,15 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
   private var previewURL: URL?
   private var pendingSelectResolve: RCTPromiseResolveBlock?
   private var pendingSelectReject: RCTPromiseRejectBlock?
+  override init() {
+    super.init()
 
+    do {
+      try storage.cleanupOrphanedCandidates()
+    } catch {
+      // Keep the module usable. A future module initialization will retry orphan cleanup.
+    }
+  }
   @objc
   static func requiresMainQueueSetup() -> Bool {
     false
