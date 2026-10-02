@@ -1,5 +1,5 @@
 import Foundation
-
+import UniformTypeIdentifiers
 struct PrescriptionDocumentState: Codable, Equatable {
   let current: String?
   let pendingCleanup: String?
@@ -30,6 +30,7 @@ enum PrescriptionDocumentStorageError: Error {
     case invalidIdentifier
     case candidateMissing
     case cleanupPending
+    case unsupportedDocument
 }
 
 final class PrescriptionDocumentStorage {
@@ -136,7 +137,63 @@ final class PrescriptionDocumentStorage {
     guard fileManager.fileExists(atPath: container.path) else {
       return
     }
+    func importCandidate(from sourceURL: URL) throws -> String {
+      let resourceValues = try sourceURL.resourceValues(
+        forKeys: [.isRegularFileKey, .contentTypeKey]
+      )
 
+      guard resourceValues.isRegularFile == true,
+            let contentType = resourceValues.contentType else {
+        throw PrescriptionDocumentStorageError.unsupportedDocument
+      }
+
+      let fileExtension: String
+
+      if contentType.conforms(to: .pdf) {
+        fileExtension = "pdf"
+      } else if contentType.conforms(to: .jpeg) {
+        fileExtension = "jpg"
+      } else if contentType.conforms(to: .png) {
+        fileExtension = "png"
+      } else {
+        throw PrescriptionDocumentStorageError.unsupportedDocument
+      }
+
+      let candidateIdentifier = UUID().uuidString.lowercased()
+      let container = try candidateContainerURL(for: candidateIdentifier)
+
+      do {
+        try fileManager.createDirectory(
+          at: container,
+          withIntermediateDirectories: false,
+          attributes: [
+            .protectionKey: FileProtectionType.complete,
+          ]
+        )
+
+        let destination = container
+          .appendingPathComponent("document", isDirectory: false)
+          .appendingPathExtension(fileExtension)
+
+        try fileManager.copyItem(
+          at: sourceURL,
+          to: destination
+        )
+
+        try applyFileProtection(to: container)
+        try applyFileProtection(to: destination)
+        try excludeFromBackup(container)
+        try excludeFromBackup(destination)
+
+        return candidateIdentifier
+      } catch {
+        if fileManager.fileExists(atPath: container.path) {
+          try? fileManager.removeItem(at: container)
+        }
+
+        throw error
+      }
+    }
     try fileManager.removeItem(at: container)
   }
 
