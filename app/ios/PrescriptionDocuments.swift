@@ -1,10 +1,14 @@
 import Foundation
 import React
+import UIKit
+import UniformTypeIdentifiers
 
 @objc(PrescriptionDocuments)
-final class PrescriptionDocuments: NSObject {
+final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate {
 
   private let storage = PrescriptionDocumentStorage()
+  private var pendingSelectResolve: RCTPromiseResolveBlock?
+  private var pendingSelectReject: RCTPromiseRejectBlock?
 
   @objc
   static func requiresMainQueueSetup() -> Bool {
@@ -21,10 +25,50 @@ final class PrescriptionDocuments: NSObject {
 
   @objc(select:rejecter:)
   func select(
-    _ resolve: RCTPromiseResolveBlock,
-    rejecter reject: RCTPromiseRejectBlock
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    rejectNotImplemented(reject)
+    DispatchQueue.main.async { [weak self] in
+      guard let self else {
+        reject(
+          "prescription_documents_select_failed",
+          "Unable to open the prescription document picker.",
+          nil
+        )
+        return
+      }
+
+      guard self.pendingSelectResolve == nil else {
+        reject(
+          "prescription_documents_selection_busy",
+          "A prescription document selection is already in progress.",
+          nil
+        )
+        return
+      }
+
+      guard let presenter = self.presentingViewController() else {
+        reject(
+          "prescription_documents_select_failed",
+          "Unable to open the prescription document picker.",
+          nil
+        )
+        return
+      }
+
+      self.pendingSelectResolve = resolve
+      self.pendingSelectReject = reject
+
+      let picker = UIDocumentPickerViewController(
+        forOpeningContentTypes: [.pdf, .jpeg, .png],
+        asCopy: true
+      )
+
+      picker.delegate = self
+      picker.allowsMultipleSelection = false
+
+      presenter.present(picker, animated: true)
+    }
   }
 
   @objc(commit:resolver:rejecter:)
@@ -136,5 +180,96 @@ final class PrescriptionDocuments: NSObject {
     rejecter reject: RCTPromiseRejectBlock
   ) {
     rejectNotImplemented(reject)
+  }
+  func documentPicker(
+    _ controller: UIDocumentPickerViewController,
+    didPickDocumentsAt urls: [URL]
+  ) {
+    guard let sourceURL = urls.first else {
+      finishSelection(with: nil)
+      return
+    }
+
+    let accessed = sourceURL.startAccessingSecurityScopedResource()
+
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      defer {
+        if accessed {
+          sourceURL.stopAccessingSecurityScopedResource()
+        }
+      }
+
+      guard let self else {
+        return
+      }
+
+      do {
+        let candidate = try self.storage.importCandidate(from: sourceURL)
+
+        DispatchQueue.main.async {
+          self.finishSelection(with: candidate)
+        }
+      } catch PrescriptionDocumentStorageError.unsupportedDocument {
+        DispatchQueue.main.async {
+          self.failSelection(
+            code: "prescription_documents_unsupported_document",
+            message: "Only PDF, JPEG and PNG prescription documents are supported."
+          )
+        }
+      } catch {
+        DispatchQueue.main.async {
+          self.failSelection(
+            code: "prescription_documents_select_failed",
+            message: "Unable to import the selected prescription document."
+          )
+        }
+      }
+    }
+  }
+
+  func documentPickerWasCancelled(
+    _ controller: UIDocumentPickerViewController
+  ) {
+    finishSelection(with: nil)
+  }
+
+  private func finishSelection(with candidate: String?) {
+    let resolve = pendingSelectResolve
+
+    pendingSelectResolve = nil
+    pendingSelectReject = nil
+
+    resolve?(candidate ?? NSNull())
+  }
+
+  private func failSelection(
+    code: String,
+    message: String
+  ) {
+    let reject = pendingSelectReject
+
+    pendingSelectResolve = nil
+    pendingSelectReject = nil
+
+    reject?(code, message, nil)
+  }
+
+  private func presentingViewController() -> UIViewController? {
+    let scenes = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+
+    guard let window = scenes
+      .flatMap({ $0.windows })
+      .first(where: { $0.isKeyWindow }) else {
+      return nil
+    }
+
+    var presenter = window.rootViewController
+
+    while let presented = presenter?.presentedViewController {
+      presenter = presented
+    }
+
+    return presenter
   }
 }
