@@ -26,8 +26,10 @@ struct PrescriptionDocumentState: Codable, Equatable {
 }
 
 enum PrescriptionDocumentStorageError: Error {
-  case invalidState
-  case invalidIdentifier
+    case invalidState
+    case invalidIdentifier
+    case candidateMissing
+    case cleanupPending
 }
 
 final class PrescriptionDocumentStorage {
@@ -129,6 +131,48 @@ final class PrescriptionDocumentStorage {
   }
 
   func removeCandidateContainer(for identifier: String) throws {
+      func commitCandidate(_ candidateIdentifier: String) throws -> String {
+        let state = try readState()
+
+        guard state.pendingCleanup == nil else {
+          throw PrescriptionDocumentStorageError.cleanupPending
+        }
+
+        let candidate = try candidateContainerURL(for: candidateIdentifier)
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(
+          atPath: candidate.path,
+          isDirectory: &isDirectory
+        ),
+        isDirectory.boolValue else {
+          throw PrescriptionDocumentStorageError.candidateMissing
+        }
+
+        let newIdentifier = UUID().uuidString.lowercased()
+        let destination = try documentContainerURL(for: newIdentifier)
+
+        do {
+          try fileManager.copyItem(at: candidate, to: destination)
+          try applyFileProtection(to: destination)
+          try excludeFromBackup(destination)
+
+          let committedState = PrescriptionDocumentState(
+            current: newIdentifier,
+            pendingCleanup: state.current
+          )
+
+          try writeState(committedState)
+
+          return newIdentifier
+        } catch {
+          if fileManager.fileExists(atPath: destination.path) {
+            try? fileManager.removeItem(at: destination)
+          }
+
+          throw error
+        }
+      }
     let container = try candidateContainerURL(for: identifier)
 
     guard fileManager.fileExists(atPath: container.path) else {
