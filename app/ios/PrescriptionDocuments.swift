@@ -33,7 +33,28 @@ final class PrescriptionDocuments: NSObject {
     resolver resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock
   ) {
-    rejectNotImplemented(reject)
+    do {
+      let current = try storage.commitCandidate(candidate)
+      resolve(current)
+    } catch PrescriptionDocumentStorageError.cleanupPending {
+      reject(
+        "prescription_documents_cleanup_pending",
+        "Prescription document cleanup must complete before another import.",
+        nil
+      )
+    } catch PrescriptionDocumentStorageError.candidateMissing {
+      reject(
+        "prescription_documents_candidate_missing",
+        "The temporary prescription document is no longer available.",
+        nil
+      )
+    } catch {
+      reject(
+        "prescription_documents_commit_failed",
+        "Unable to save the prescription document.",
+        nil
+      )
+    }
   }
 
   @objc(read:rejecter:)
