@@ -19,6 +19,12 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
     } catch {
       // Keep the module usable. A future module initialization will retry orphan cleanup.
     }
+
+    do {
+      try storage.cleanupOrphanedDocuments()
+    } catch {
+      // Keep the module usable. A future module initialization will retry orphan cleanup.
+    }
   }
   @objc
   static func requiresMainQueueSetup() -> Bool {

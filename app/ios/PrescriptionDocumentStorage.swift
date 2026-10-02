@@ -282,6 +282,55 @@ final class PrescriptionDocumentStorage {
       throw firstError
     }
   }
+  func cleanupOrphanedDocuments() throws {
+    let state = try readState()
+    let directory = try documentContainersDirectory()
+
+    let protectedIdentifiers = Set(
+      [state.current, state.pendingCleanup]
+        .compactMap { $0?.lowercased() }
+    )
+
+    let documents = try fileManager.contentsOfDirectory(
+      at: directory,
+      includingPropertiesForKeys: [.isDirectoryKey],
+      options: []
+    )
+
+    var firstError: Error?
+
+    for document in documents {
+      let identifier = document.lastPathComponent
+
+      guard UUID(uuidString: identifier) != nil else {
+        continue
+      }
+
+      let resourceValues = try document.resourceValues(
+        forKeys: [.isDirectoryKey]
+      )
+
+      guard resourceValues.isDirectory == true else {
+        continue
+      }
+
+      guard !protectedIdentifiers.contains(identifier.lowercased()) else {
+        continue
+      }
+
+      do {
+        try fileManager.removeItem(at: document)
+      } catch {
+        if firstError == nil {
+          firstError = error
+        }
+      }
+    }
+
+    if let firstError {
+      throw firstError
+    }
+  }
   private func documentContainersDirectory() throws -> URL {
     let directory = try documentsDirectory()
       .appendingPathComponent(
