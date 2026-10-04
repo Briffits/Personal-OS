@@ -73,7 +73,7 @@ Examples:
 
 - HealthKit service reads medication-related Health data.
 - Medication stock service calculates estimated stock.
-- Prescription storage service manages the current prescription.
+- Prescription Wallet service manages independently identifiable retained prescriptions.
 - Reminder service communicates with Apple Reminders.
 - Calendar service communicates with Apple Calendar.
 - Today priority engine determines NOW and TODAY.
@@ -445,17 +445,14 @@ Apple Health remains responsible for:
 
 Personal OS handles:
 
-- current prescription access;
-- physical stock additions;
-- estimated remaining stock;
-- manual stock correction;
-- low-stock awareness.
+- retained prescription access in a standalone Prescription Wallet domain;
+- physical stock additions, estimated remaining stock, manual stock correction and low-stock awareness in the separate Medication domain.
 
 Do not recreate a medication-adherence application.
 
 Do not provide diagnosis, treatment recommendations or medical interpretation.
 
-Only the current prescription is required unless future requirements explicitly change this.
+The wallet retains multiple standard or temporary prescriptions. Each prescription links to zero or more medication IDs, and each medication may relate to zero or more prescriptions. A prescription is never a property of a medication. Every prescription requires an expiry date; expiry is derived and never automatically deletes a record. There is no persisted inactive lifecycle state. Retained records are assumed current until the user deletes them.
 
 Replacing or deleting a prescription requires explicit confirmation.
 

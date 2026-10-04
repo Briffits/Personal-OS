@@ -185,11 +185,13 @@ The Prescription Wallet is one of the original reasons for creating Personal OS 
 
 Apple Health will remain responsible for medication schedules, prompts and logging whether doses were taken.
 
-Personal OS will instead handle the administrative side of medication management.
+Prescription Wallet is a standalone document domain, separate from Medication and its stock tracking. Prescriptions and medications may each relate to zero, one or many of the other, using medication ID links rather than medication-owned prescriptions.
 
 ### Planned functions
 
-- store the current prescription as an image or document;
+- retain multiple standard and temporary prescriptions as images or documents;
+- require an expiry date for every prescription, with optional issued dates and optional start dates for temporary prescriptions;
+- derive expiry without automatically deleting records; retained prescriptions are assumed current until explicitly deleted, with no persisted inactive state;
 - provide quick Face ID-protected access so it can be shown to a pharmacist;
 - record physical medication stock added by the user;
 - read medication dose events from Apple Health where permission is granted;
@@ -208,6 +210,8 @@ Approximately 23 days remaining
 ```
 
 Personal OS does not aim to become a medication-adherence application and will not duplicate Apple Health's dose-taking interface.
+
+Medication stock remains a separate responsibility. Prescription record IDs remain stable when their associated opaque document IDs change. See [Prescription Wallet domain and migration](PRESCRIPTION_WALLET.md) for implementation status.
 
 ---
 

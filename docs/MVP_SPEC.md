@@ -92,3 +92,28 @@ Estimated time: 40 minutes
 
 Reply to important email
 Estimated time: 10 minutes
+```
+
+---
+
+## Prescription Wallet
+
+Prescription Wallet is a standalone collection of retained documents, separate from Medication. A prescription may link to zero, one or many medication IDs; a medication may relate to zero, one or many prescriptions. Prescriptions do not own medication records and are never properties of medications. Medication stock tracking continues independently.
+
+Each prescription has a stable `PrescriptionRecordId`, a separate opaque document ID and metadata:
+
+- `kind`: `standard` or `temporary`;
+- `medicationIds`: a readonly array of unique, non-blank medication IDs;
+- `expiresOn`: required;
+- `issuedOn`: optional;
+- `startsOn`: optional for temporary prescriptions only.
+
+Dates must be real `YYYY-MM-DD` calendar dates, including leap-year validation. Both `startsOn` and `issuedOn`, when supplied, must be on or before `expiresOn`.
+
+Multiple prescriptions may be retained simultaneously. Every retained record is assumed current; there is no persisted inactive or expired status. Expiry is derived after the expiry day using the user's calendar date. Expiry never deletes a record. Deletion and document replacement require explicit confirmation. Replacement retains the record ID and metadata and changes only the associated document ID.
+
+Documents remain app-private. JavaScript receives opaque identifiers, never filesystem paths. Atomic storage mutations, candidate release, interrupted-commit recovery, file protection, backup exclusion, stale-ID rejection and safe replacement remain required.
+
+Metadata is independently editable through `updatePrescription(recordId, metadata)`. Validate before mutation and preserve both IDs. The durable `updateMetadata(expectedRecord, metadata)` transaction compares the complete existing record and rejects stale snapshots, unknown records and pending cleanup without mutation. Metadata-only updates perform no document, candidate or cleanup operations.
+
+This iteration implements the platform-independent TypeScript model, collection service and tests. The existing native store and screen remain legacy single-document implementations pending the [native and UI migration](PRESCRIPTION_WALLET.md). No collection persistence is fabricated in JavaScript.
