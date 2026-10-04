@@ -35,8 +35,9 @@ The first working version will focus on:
 - TODAY: two additional priorities
 
 **Prescription Wallet**
-- current prescription
-- medication stock tracking
+- multiple retained standard and temporary prescriptions, independent of medications
+- required expiry dates and optional many-to-many medication links
+- separate medication stock tracking
 - Apple Health integration
 - quick Face ID-protected prescription access
 
@@ -52,6 +53,8 @@ The first working version will focus on:
 Later phases will introduce features such as Gmail intelligence, configurable briefings, Waiting For, Projects, news intelligence and broader cross-source reasoning.
 
 ## Project Documentation
+
+The collection-oriented TypeScript domain and service are implemented behind an explicit storage contract. The existing screen and Swift storage still use the legacy single-current-document workflow; collection persistence and UI migration remain required. See [Prescription Wallet migration](docs/PRESCRIPTION_WALLET.md).
 
 Detailed project documentation is available here:
 

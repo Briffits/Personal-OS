@@ -1,5 +1,9 @@
 import { NativeModules } from 'react-native';
 import type {
+  PrescriptionDocuments,
+  PrescriptionWalletStore,
+} from '../prescriptions/prescriptionService';
+import type {
   CurrentPrescriptionStore,
   PrescriptionCandidateId,
   PrescriptionId,
@@ -9,7 +13,7 @@ import type {
 } from '../prescriptions/currentPrescriptionService';
 
 /**
- * Future PrescriptionDocuments native module. IDs are opaque handles, never
+ * Legacy single-current PrescriptionDocuments native module. IDs are opaque handles, never
  * paths, URLs or file contents. Native code owns Files selection, app-private
  * copies, durable state and crash recovery under the existing service contracts.
  * Commit must not consume candidates; cleanup removes only the superseded
@@ -21,6 +25,11 @@ export interface PrescriptionDocumentsNativeModule
   extends CurrentPrescriptionStore,
     PrescriptionSelector,
     PrescriptionViewer {}
+
+// Intended collection API. This is a contract only: the Swift module above does
+// not implement it, and must never be cast/adapted into it using commit(candidate).
+export interface PrescriptionWalletNativeModule
+  extends PrescriptionWalletStore, PrescriptionDocuments {}
 
 export class PrescriptionDocumentsBoundaryError extends Error {
   constructor(public readonly code: 'unavailable' | 'invalid-response') {
