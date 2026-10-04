@@ -232,6 +232,15 @@ if (result.status === 'candidate-release-failed') {
         return;
       }
 
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'prescription_documents_authentication_cancelled'
+      ) {
+        return;
+      }
+
       Alert.alert(
         'Unable to open prescription',
         'Personal OS could not access the prescription wallet.',

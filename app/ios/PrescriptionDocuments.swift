@@ -3,6 +3,7 @@ import React
 import UIKit
 import UniformTypeIdentifiers
 import QuickLook
+import LocalAuthentication
 
 @objc(PrescriptionDocuments)
 final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreviewControllerDataSource {
@@ -189,6 +190,49 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
       )
     }
   }
+  private enum PrescriptionAuthenticationResult {
+    case authenticated
+    case cancelled
+    case failed
+  }
+  private func authenticateForPrescription(
+    completion: @escaping (PrescriptionAuthenticationResult) -> Void
+  ) {
+    let context = LAContext()
+    context.localizedCancelTitle = "Cancel"
+
+    var authenticationError: NSError?
+
+    guard context.canEvaluatePolicy(
+      .deviceOwnerAuthentication,
+      error: &authenticationError
+    ) else {
+      completion(.failed)
+      return
+    }
+
+    context.evaluatePolicy(
+      .deviceOwnerAuthentication,
+      localizedReason: "Unlock your stored prescription."
+    ) { success, error in
+      if success {
+        completion(.authenticated)
+        return
+      }
+
+      if let localAuthenticationError = error as? LAError {
+        switch localAuthenticationError.code {
+        case .userCancel, .appCancel, .systemCancel:
+          completion(.cancelled)
+        default:
+          completion(.failed)
+        }
+        return
+      }
+
+      completion(.failed)
+    }
+  }
   @objc(open:resolver:rejecter:)
   func open(
     _ current: String,
@@ -216,23 +260,46 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
 
         let documentURL = try self.storage.documentURL(for: current)
 
-        DispatchQueue.main.async {
-          guard let presenter = self.presentingViewController() else {
-            reject(
-              "prescription_documents_open_failed",
-              "Unable to open the prescription document.",
-              nil
-            )
-            return
-          }
+        self.authenticateForPrescription { authenticationResult in
+          switch authenticationResult {
+          case .cancelled:
+            DispatchQueue.main.async {
+              reject(
+                "prescription_documents_authentication_cancelled",
+                "Prescription authentication was cancelled.",
+                nil
+              )
+            }
 
-          self.previewURL = documentURL
+          case .failed:
+            DispatchQueue.main.async {
+              reject(
+                "prescription_documents_authentication_failed",
+                "Authentication is required to view the prescription document.",
+                nil
+              )
+            }
 
-          let previewController = QLPreviewController()
-          previewController.dataSource = self
+          case .authenticated:
+            DispatchQueue.main.async {
+              guard let presenter = self.presentingViewController() else {
+                reject(
+                  "prescription_documents_open_failed",
+                  "Unable to open the prescription document.",
+                  nil
+                )
+                return
+              }
 
-          presenter.present(previewController, animated: true) {
-            resolve(nil)
+              self.previewURL = documentURL
+
+              let previewController = QLPreviewController()
+              previewController.dataSource = self
+
+              presenter.present(previewController, animated: true) {
+                resolve(nil)
+              }
+            }
           }
         }
       } catch {
