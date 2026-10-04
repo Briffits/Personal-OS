@@ -6,10 +6,11 @@ import BottomNavigation, {
   type AppTab,
 } from './src/components/BottomNavigation';
 import LibraryScreen from './src/screens/LibraryScreen';
+import MedicationScreen from './src/screens/MedicationScreen';
 import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
 import TodayScreen from './src/screens/TodayScreen';
 
-type AppScreen = 'main' | 'prescriptionWallet';
+type AppScreen = 'main' | 'medication' | 'prescriptionWallet';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -22,6 +23,10 @@ function App() {
   };
 
   const renderScreen = () => {
+    if (activeScreen === 'medication') {
+      return <MedicationScreen onBack={() => setActiveScreen('main')} />;
+    }
+
     if (activeScreen === 'prescriptionWallet') {
       return (
         <PrescriptionWalletScreen
@@ -34,6 +39,7 @@ function App() {
       case 'Library':
         return (
           <LibraryScreen
+            onOpenMedication={() => setActiveScreen('medication')}
             onOpenPrescriptionWallet={() =>
               setActiveScreen('prescriptionWallet')
             }

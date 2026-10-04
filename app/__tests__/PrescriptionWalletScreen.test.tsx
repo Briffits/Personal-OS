@@ -3,31 +3,50 @@ import {Alert} from 'react-native';
 import ReactTestRenderer, {act} from 'react-test-renderer';
 
 import PrescriptionWalletScreen from '../src/screens/PrescriptionWalletScreen';
-import {
-  loadMedicationStock,
-  saveMedicationStock,
-} from '../src/storage/medicationStockStorage';
+import {NativePrescriptionDocuments} from '../src/native/NativePrescriptionDocuments';
+import {loadMedicationStock, saveMedicationStock} from '../src/storage/medicationStockStorage';
+import type {PrescriptionCandidateId, PrescriptionId} from '../src/prescriptions/currentPrescriptionService';
 
 jest.mock('react-native-safe-area-context', () =>
   require('react-native-safe-area-context/jest/mock').default,
 );
-
+jest.mock('../src/native/NativePrescriptionDocuments', () => ({
+  NativePrescriptionDocuments: {
+    read: jest.fn(),
+    select: jest.fn(),
+    commit: jest.fn(),
+    cleanup: jest.fn(),
+    release: jest.fn(),
+    open: jest.fn(),
+  },
+}));
 jest.mock('../src/storage/medicationStockStorage', () => ({
   loadMedicationStock: jest.fn(),
   saveMedicationStock: jest.fn(),
 }));
 
-const loadStock = jest.mocked(loadMedicationStock);
-const saveStock = jest.mocked(saveMedicationStock);
+const native = jest.mocked(NativePrescriptionDocuments);
+const current = 'test-current' as PrescriptionId;
+const next = 'test-next' as PrescriptionId;
+const candidate = 'test-candidate' as PrescriptionCandidateId;
 let screen: ReactTestRenderer.ReactTestRenderer;
-let prompt: jest.SpyInstance;
 let alert: jest.SpyInstance;
 
-beforeEach(() => {
-  loadStock.mockReset().mockResolvedValue(12);
-  saveStock.mockReset().mockResolvedValue(undefined);
-  prompt = jest.spyOn(Alert, 'prompt').mockImplementation(() => {});
+beforeEach(async () => {
+  jest.clearAllMocks();
+  for (const method of Object.values(native)) {
+    method.mockReset();
+  }
+  native.read.mockResolvedValue({current, pendingCleanup: null});
+  native.select.mockResolvedValue(candidate);
+  native.commit.mockResolvedValue(next);
+  native.open.mockResolvedValue(undefined);
+  native.cleanup.mockResolvedValue(undefined);
+  native.release.mockResolvedValue(undefined);
   alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await act(async () => {
+    screen = ReactTestRenderer.create(<PrescriptionWalletScreen onBack={() => {}} />);
+  });
 });
 
 afterEach(async () => {
@@ -35,78 +54,80 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
-async function renderScreen() {
-  await act(async () => {
-    screen = ReactTestRenderer.create(
-      <PrescriptionWalletScreen onBack={() => {}} />,
-    );
-  });
+async function press(label: string) {
+  await act(async () => screen.root.findByProps({accessibilityLabel: label}).props.onPress());
 }
 
-function stockButton(label: string) {
-  return screen.root.findByProps({accessibilityLabel: label});
-}
-
-async function submitStock(label: string, value: string | undefined) {
-  await act(async () => stockButton(label).props.onPress());
-  const buttons = prompt.mock.calls[prompt.mock.calls.length - 1][2];
-  await act(async () => buttons[1].onPress(value));
-}
-
-test.each(['', '   ', '\t\n', undefined, '-1', '1.5', 'abc', 'Infinity'])(
-  'rejects invalid correction %p without saving or changing stock',
-  async value => {
-    await renderScreen();
-    await submitStock('Correct Stock', value);
-
-    expect(alert).toHaveBeenCalledWith(
-      'Invalid amount',
-      'Enter a whole number of zero or more.',
-    );
-    expect(saveStock).not.toHaveBeenCalled();
-    expect(JSON.stringify(screen.toJSON())).toContain(
-      'Estimated stock: 12 tablets',
-    );
-  },
-);
-
-test.each([
-  ['0', 0],
-  [' 7 ', 7],
-])('saves explicit correction %p', async (value, expected) => {
-  await renderScreen();
-  await submitStock('Correct Stock', value as string);
-
-  expect(saveStock).toHaveBeenCalledWith(expected);
-  expect(alert).not.toHaveBeenCalled();
-  expect(JSON.stringify(screen.toJSON())).toContain(
-    `Estimated stock: ${expected} tablets`,
-  );
+test('shows only prescription controls and does no stock or document work on entry', () => {
+  for (const label of ['View Prescription', 'Replace Prescription']) {
+    expect(screen.root.findByProps({accessibilityLabel: label})).toBeDefined();
+  }
+  for (const label of ['Add Stock', 'Correct Stock']) {
+    expect(screen.root.findAllByProps({accessibilityLabel: label})).toHaveLength(0);
+  }
+  expect(JSON.stringify(screen.toJSON())).not.toContain('Medication A');
+  expect(loadMedicationStock).not.toHaveBeenCalled();
+  expect(saveMedicationStock).not.toHaveBeenCalled();
+  for (const method of Object.values(native)) {
+    expect(method).not.toHaveBeenCalled();
+  }
 });
 
-test('blocks stock actions until saved stock loads, then adds to saved stock', async () => {
-  let resolveStock!: (value: number) => void;
-  loadStock.mockReturnValue(
-    new Promise(resolve => {
-      resolveStock = resolve;
-    }),
-  );
-  await renderScreen();
+test('view delegates each request to the existing native protected viewer', async () => {
+  await press('View Prescription');
+  await press('View Prescription');
+  expect(native.open.mock.calls).toEqual([[current], [current]]);
+  expect(native.select).not.toHaveBeenCalled();
+});
 
-  for (const label of ['Add Stock', 'Correct Stock']) {
-    expect(stockButton(label).props.disabled).toBe(true);
-    expect(stockButton(label).props.accessibilityState).toEqual({disabled: true});
-    await act(async () => stockButton(label).props.onPress());
+test('empty wallet imports through the existing native workflow', async () => {
+  native.read.mockResolvedValue({current: null, pendingCleanup: null});
+  await press('View Prescription');
+  expect(native.open).not.toHaveBeenCalled();
+  expect(native.select).toHaveBeenCalledTimes(1);
+  expect(native.commit).toHaveBeenCalledWith(candidate);
+  expect(native.release).toHaveBeenCalledWith(candidate);
+  expect(alert).toHaveBeenCalledWith('Prescription saved', 'Your prescription is now stored in Personal OS.');
+});
+
+test('cancelled document selection leaves the wallet unchanged', async () => {
+  native.read.mockResolvedValue({current: null, pendingCleanup: null});
+  native.select.mockResolvedValue(null);
+  await press('View Prescription');
+  expect(native.commit).not.toHaveBeenCalled();
+  expect(alert).not.toHaveBeenCalled();
+});
+
+test.each([false, true])('replacement requires explicit confirmation: %p', async confirm => {
+  alert.mockImplementation((title, _message, buttons) => {
+    if (title === 'Replace Prescription') {
+      expect(native.commit).not.toHaveBeenCalled();
+      buttons[confirm ? 1 : 0].onPress();
+    }
+  });
+  await press('Replace Prescription');
+  expect(alert.mock.calls[0][0]).toBe('Replace Prescription');
+  if (confirm) {
+    expect(native.commit).toHaveBeenCalledWith(candidate);
+    expect(native.cleanup).toHaveBeenCalledTimes(1);
+  } else {
+    expect(native.commit).not.toHaveBeenCalled();
+    expect(native.cleanup).not.toHaveBeenCalled();
   }
-  expect(prompt).not.toHaveBeenCalled();
-  expect(saveStock).not.toHaveBeenCalled();
+  expect(native.release).toHaveBeenCalledWith(candidate);
+});
 
-  await act(async () => resolveStock(12));
+test('authentication cancellation does not import, replace or show an error', async () => {
+  native.open.mockRejectedValue({code: 'prescription_documents_authentication_cancelled'});
+  await press('View Prescription');
+  expect(native.select).not.toHaveBeenCalled();
+  expect(native.commit).not.toHaveBeenCalled();
+  expect(alert).not.toHaveBeenCalled();
+});
 
-  for (const label of ['Add Stock', 'Correct Stock']) {
-    expect(stockButton(label).props.disabled).toBe(false);
-    expect(stockButton(label).props.accessibilityState).toEqual({disabled: false});
-  }
-  await submitStock('Add Stock', '3');
-  expect(saveStock).toHaveBeenCalledWith(15);
+test('authentication failure shows the existing generic error without importing', async () => {
+  native.open.mockRejectedValue({code: 'prescription_documents_authentication_failed'});
+  await press('View Prescription');
+  expect(native.select).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledWith('Unable to open prescription', 'Personal OS could not access the prescription wallet.');
 });

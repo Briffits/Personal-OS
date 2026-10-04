@@ -1,4 +1,3 @@
-import {useEffect, useState} from 'react';
 import {
   Alert,
   Pressable,
@@ -18,10 +17,6 @@ import {
   typography,
   usePersonalOSTheme,
 } from '../design-system';
-import {
-  loadMedicationStock,
-  saveMedicationStock,
-} from '../storage/medicationStockStorage';
 
 import {
   createCurrentPrescriptionService,
@@ -68,113 +63,7 @@ function PrescriptionWalletScreen({
   const theme = usePersonalOSTheme();
   const {width: screenWidth} = useWindowDimensions();
 
-  const [estimatedStock, setEstimatedStock] = useState<number | null>(null);
-  const [isStockLoading, setIsStockLoading] = useState(true);
-
   const horizontalPadding = goldenScreenPadding(screenWidth);
-
-  useEffect(() => {
-    const loadSavedStock = async () => {
-      try {
-        const savedStock = await loadMedicationStock();
-        setEstimatedStock(savedStock);
-      } catch {
-        Alert.alert(
-          'Unable to load stock',
-          'Your saved stock amount could not be loaded.',
-        );
-      } finally {
-        setIsStockLoading(false);
-      }
-    };
-
-    loadSavedStock();
-  }, []);
-
-  const updateStock = async (newStock: number) => {
-    try {
-      await saveMedicationStock(newStock);
-      setEstimatedStock(newStock);
-    } catch {
-      Alert.alert(
-        'Unable to save stock',
-        'Your stock amount could not be saved. Please try again.',
-      );
-    }
-  };
-
-  const handleAddStock = () => {
-    if (isStockLoading) {
-      return;
-    }
-
-    Alert.prompt(
-      'Add Stock',
-      'Enter the number of tablets to add.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Add',
-          onPress: value => {
-            const amount = Number(value);
-
-            if (!Number.isInteger(amount) || amount <= 0) {
-              Alert.alert(
-                'Invalid amount',
-                'Enter a whole number greater than zero.',
-              );
-              return;
-            }
-
-            updateStock((estimatedStock ?? 0) + amount);
-          },
-        },
-      ],
-      'plain-text',
-      '',
-      'number-pad',
-    );
-  };
-
-  const handleCorrectStock = () => {
-    if (isStockLoading) {
-      return;
-    }
-
-    Alert.prompt(
-      'Correct Stock',
-      'Enter the current number of tablets you physically have.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Update',
-          onPress: value => {
-            const input = value?.trim() ?? '';
-            const amount = Number(input);
-
-            if (input === '' || !Number.isInteger(amount) || amount < 0) {
-              Alert.alert(
-                'Invalid amount',
-                'Enter a whole number of zero or more.',
-              );
-              return;
-            }
-
-            updateStock(amount);
-          },
-        },
-      ],
-      'plain-text',
-      '',
-      'number-pad',
-    );
-  };
 
   const handlePrescriptionAction = async () => {
     try {
@@ -356,57 +245,25 @@ return (
               color: theme.colours.textPrimary,
             },
           ]}>
-          Prescription Wallet
+          Prescriptions
         </Text>
 
         <AppCard>
           <Text
             style={[
-              styles.medicationName,
-              {
-                color: theme.colours.textPrimary,
-              },
-            ]}>
-            Medication A
-          </Text>
-
-          <Text
-            style={[
               typography.cardTitle,
-              styles.stockText,
-              {
-                color: theme.colours.textPrimary,
-              },
+              {color: theme.colours.textPrimary},
             ]}>
-            {isStockLoading
-              ? 'Loading stock…'
-              : estimatedStock === null
-                ? 'Stock not recorded'
-                : `Estimated stock: ${estimatedStock} tablets`}
+            Current prescription
           </Text>
-
           <Text
             style={[
               typography.body,
-              {
-                color: theme.colours.textSecondary,
-              },
+              styles.description,
+              {color: theme.colours.textSecondary},
             ]}>
-            {isStockLoading
-              ? 'Checking saved stock'
-              : estimatedStock === null
-                ? 'Add stock to begin tracking'
-                : 'Stock quantity recorded'}
+            View your saved prescription, or import one if none is saved yet.
           </Text>
-
-          <View
-            style={[
-              styles.divider,
-              {
-                backgroundColor: theme.colours.primarySubtle,
-              },
-            ]}
-          />
 
           <View style={styles.actions}>
             <Pressable
@@ -441,41 +298,6 @@ return (
               </Text>
             </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add Stock"
-              accessibilityState={{disabled: isStockLoading}}
-              disabled={isStockLoading}
-              onPress={handleAddStock}
-              style={styles.actionButton}>
-              <Text
-                style={[
-                  typography.bodyStrong,
-                  {
-                    color: theme.colours.primary,
-                  },
-                ]}>
-                Add Stock
-              </Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Correct Stock"
-              accessibilityState={{disabled: isStockLoading}}
-              disabled={isStockLoading}
-              onPress={handleCorrectStock}
-              style={styles.actionButton}>
-              <Text
-                style={[
-                  typography.bodyStrong,
-                  {
-                    color: theme.colours.primary,
-                  },
-                ]}>
-                Correct Stock
-              </Text>
-            </Pressable>
           </View>
         </AppCard>
 
@@ -487,9 +309,7 @@ return (
               color: theme.colours.textSecondary,
             },
           ]}>
-    Stock is saved on this device. Add stock when you receive tablets, or
-    correct it to match your current count. Your current prescription is stored
-    privately on this device.
+            Your current prescription is stored privately on this device.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -512,17 +332,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.xxl,
   },
-  medicationName: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '700',
-    marginBottom: spacing.lg,
-  },
-  stockText: {
-    marginBottom: spacing.sm,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
+  description: {
     marginVertical: spacing.lg,
   },
   actions: {

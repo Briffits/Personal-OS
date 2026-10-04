@@ -3,7 +3,7 @@ import {
   StyleSheet,
   Text,
   useWindowDimensions,
-  View,
+  ScrollView,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
@@ -16,10 +16,12 @@ import {
 } from '../design-system';
 
 type LibraryScreenProps = {
+  onOpenMedication: () => void;
   onOpenPrescriptionWallet: () => void;
 };
 
 function LibraryScreen({
+  onOpenMedication,
   onOpenPrescriptionWallet,
 }: LibraryScreenProps) {
   const theme = usePersonalOSTheme();
@@ -35,8 +37,8 @@ function LibraryScreen({
           backgroundColor: theme.colours.background,
         },
       ]}>
-      <View
-        style={[
+      <ScrollView
+        contentContainerStyle={[
           styles.content,
           {
             paddingHorizontal: horizontalPadding,
@@ -56,9 +58,9 @@ function LibraryScreen({
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Open Prescription Wallet"
-          onPress={onOpenPrescriptionWallet}
-          style={styles.walletEntry}>
+          accessibilityLabel="Open Medication"
+          onPress={onOpenMedication}
+          style={styles.entry}>
           <AppCard>
             <Text
               style={[
@@ -68,7 +70,7 @@ function LibraryScreen({
                   color: theme.colours.textPrimary,
                 },
               ]}>
-              Prescription Wallet
+              Medication
             </Text>
 
             <Text
@@ -78,11 +80,40 @@ function LibraryScreen({
                   color: theme.colours.textSecondary,
                 },
               ]}>
-              View your current prescription and manage medication stock.
+              Check estimated stock, add stock or correct your count.
             </Text>
           </AppCard>
         </Pressable>
-      </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Prescriptions"
+          onPress={onOpenPrescriptionWallet}
+          style={styles.entry}>
+          <AppCard>
+            <Text
+              style={[
+                typography.cardTitle,
+                styles.cardTitle,
+                {
+                  color: theme.colours.textPrimary,
+                },
+              ]}>
+              Prescriptions
+            </Text>
+
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: theme.colours.textSecondary,
+                },
+              ]}>
+              View, import or replace your current prescription.
+            </Text>
+          </AppCard>
+        </Pressable>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -92,13 +123,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    paddingBottom: spacing.xxl,
   },
   title: {
     marginBottom: spacing.xxl,
   },
-  walletEntry: {
+  entry: {
     width: '100%',
+    marginBottom: spacing.lg,
   },
   cardTitle: {
     marginBottom: spacing.sm,
