@@ -14,7 +14,8 @@ jest.mock('../src/storage/medicationStockStorage', () => ({
 }));
 jest.mock('../src/native/NativePrescriptionDocuments', () => ({
   NativePrescriptionDocuments: {
-    read: jest.fn(), select: jest.fn(), commit: jest.fn(),
+    read: jest.fn(), select: jest.fn(), create: jest.fn(), replace: jest.fn(),
+    remove: jest.fn(), updateMetadata: jest.fn(), migrateLegacy: jest.fn(),
     cleanup: jest.fn(), release: jest.fn(), open: jest.fn(),
   },
 }));
@@ -25,6 +26,7 @@ const saveStock = jest.mocked(saveMedicationStock);
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  jest.mocked(NativePrescriptionDocuments.read).mockResolvedValue({records: [], pendingCleanup: []});
   loadStock.mockReset().mockResolvedValue(12);
   saveStock.mockReset().mockResolvedValue(undefined);
   await act(async () => {
@@ -69,14 +71,15 @@ test.each(['Medication', 'Prescriptions'])('%s is independently reachable from L
     expectAbsent('Replace Prescription');
     expect(loadStock).toHaveBeenCalledTimes(1);
   } else {
-    expect(screen.root.findByProps({accessibilityLabel: 'View Prescription'})).toBeDefined();
+    expect(screen.root.findByProps({accessibilityLabel: 'Add prescription'})).toBeDefined();
     expectAbsent('Add Stock');
     expectAbsent('Correct Stock');
     expect(loadStock).not.toHaveBeenCalled();
   }
-  for (const method of Object.values(NativePrescriptionDocuments)) {
-    expect(method).not.toHaveBeenCalled();
+  for (const [name, method] of Object.entries(NativePrescriptionDocuments)) {
+    if (name !== 'read') { expect(method).not.toHaveBeenCalled(); }
   }
+  expect(NativePrescriptionDocuments.read).toHaveBeenCalledTimes(destination === 'Prescriptions' ? 1 : 0);
   await press('Back to Library');
   expect(screen.root.findByProps({accessibilityLabel: 'Library tab'}).props.accessibilityState)
     .toEqual({selected: true});

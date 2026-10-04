@@ -1,35 +1,26 @@
 import { NativeModules } from 'react-native';
+import {
+  validatePrescriptionMetadata,
+  type PrescriptionCandidateId,
+  type PrescriptionDocumentId,
+  type PrescriptionMetadata,
+  type PrescriptionRecord,
+  type PrescriptionRecordId,
+} from '../prescriptions/prescription';
 import type {
   PrescriptionDocuments,
+  PrescriptionWalletState,
   PrescriptionWalletStore,
 } from '../prescriptions/prescriptionService';
-import type {
-  CurrentPrescriptionStore,
-  PrescriptionCandidateId,
-  PrescriptionId,
-  PrescriptionSelector,
-  PrescriptionState,
-  PrescriptionViewer,
-} from '../prescriptions/currentPrescriptionService';
 
-/**
- * Legacy single-current PrescriptionDocuments native module. IDs are opaque handles, never
- * paths, URLs or file contents. Native code owns Files selection, app-private
- * copies, durable state and crash recovery under the existing service contracts.
- * Commit must not consume candidates; cleanup removes only the superseded
- * app-owned copy; release never deletes the source or committed prescription.
- * Open must reject stale/unknown current IDs. Native errors must be sanitised
- * at their source: genuine operation failures propagate unchanged here.
- */
-export interface PrescriptionDocumentsNativeModule
-  extends CurrentPrescriptionStore,
-    PrescriptionSelector,
-    PrescriptionViewer {}
-
-// Intended collection API. This is a contract only: the Swift module above does
-// not implement it, and must never be cast/adapted into it using commit(candidate).
 export interface PrescriptionWalletNativeModule
-  extends PrescriptionWalletStore, PrescriptionDocuments {}
+  extends PrescriptionWalletStore,
+    PrescriptionDocuments {
+  migrateLegacy(
+    document: PrescriptionDocumentId,
+    metadata: PrescriptionMetadata,
+  ): Promise<PrescriptionRecord>;
+}
 
 export class PrescriptionDocumentsBoundaryError extends Error {
   constructor(public readonly code: 'unavailable' | 'invalid-response') {
@@ -42,80 +33,164 @@ export class PrescriptionDocumentsBoundaryError extends Error {
   }
 }
 
-function requireNativeModule(): PrescriptionDocumentsNativeModule {
+const methods = [
+  'read',
+  'create',
+  'replace',
+  'remove',
+  'updateMetadata',
+  'migrateLegacy',
+  'select',
+  'release',
+  'open',
+  'cleanup',
+] as const;
+
+function requireNativeModule(): PrescriptionWalletNativeModule {
   const native = NativeModules.PrescriptionDocuments as
-    | PrescriptionDocumentsNativeModule
-    | null
+    | PrescriptionWalletNativeModule
     | undefined;
-  if (
-    !native ||
-    typeof native.select !== 'function' ||
-    typeof native.commit !== 'function' ||
-    typeof native.read !== 'function' ||
-    typeof native.cleanup !== 'function' ||
-    typeof native.release !== 'function' ||
-    typeof native.open !== 'function'
-  ) {
+  if (!native || methods.some(method => typeof native[method] !== 'function')) {
     throw new PrescriptionDocumentsBoundaryError('unavailable');
   }
   return native;
 }
 
-function isIdentifier(value: unknown): value is string {
-  return typeof value === 'string' && /\S/.test(value);
-}
-
-function validateState(value: unknown): PrescriptionState {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new PrescriptionDocumentsBoundaryError('invalid-response');
-  }
-  const { current, pendingCleanup } = value as Record<string, unknown>;
-  if (current === null && pendingCleanup === null) {
-    return { current: null, pendingCleanup: null };
-  }
-  if (
-    isIdentifier(current) &&
-    (pendingCleanup === null || isIdentifier(pendingCleanup))
-  ) {
-    // Reconstruct only the public fields; additional native metadata stays out.
-    return {
-      current: current as PrescriptionId,
-      pendingCleanup: pendingCleanup as PrescriptionId | null,
-    };
-  }
+function invalid(): never {
   throw new PrescriptionDocumentsBoundaryError('invalid-response');
 }
 
-function validateVoid(value: unknown): void {
-  // Native promise bridges may resolve a void operation with null.
+// Native generates UUID handles. Reject paths/URLs and malformed handles at the boundary.
+function identifier(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      value,
+    )
+  ) {
+    return invalid();
+  }
+  return value;
+}
+
+function object(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return invalid();
+  }
+  return value as Record<string, unknown>;
+}
+
+function record(value: unknown): PrescriptionRecord {
+  const input = object(value);
+  let metadata: PrescriptionMetadata;
+  try {
+    metadata = validatePrescriptionMetadata(
+      input as unknown as PrescriptionMetadata,
+    );
+  } catch {
+    return invalid();
+  }
+  const id = identifier(input.id) as PrescriptionRecordId;
+  const documentId = identifier(input.documentId) as PrescriptionDocumentId;
+  if (id === (documentId as string)) {
+    return invalid();
+  }
+  return { ...metadata, id, documentId };
+}
+
+function state(value: unknown): PrescriptionWalletState {
+  const input = object(value);
+  if (!Array.isArray(input.records) || !Array.isArray(input.pendingCleanup)) {
+    return invalid();
+  }
+  const records = input.records.map(record);
+  const pendingCleanup = input.pendingCleanup.map(
+    item => identifier(item) as PrescriptionDocumentId,
+  );
+  const legacyDocumentId =
+    input.legacyDocumentId === null
+      ? undefined
+      : (identifier(input.legacyDocumentId) as PrescriptionDocumentId);
+  const retained = records.map(item => item.documentId);
+  if (legacyDocumentId) {
+    retained.push(legacyDocumentId);
+  }
+  if (
+    new Set(records.map(item => item.id)).size !== records.length ||
+    new Set(retained).size !== retained.length ||
+    new Set(pendingCleanup).size !== pendingCleanup.length ||
+    pendingCleanup.some(id => retained.includes(id)) ||
+    (legacyDocumentId !== undefined && records.length > 0)
+  ) {
+    return invalid();
+  }
+  return {
+    records,
+    pendingCleanup,
+    ...(legacyDocumentId ? { legacyDocumentId } : {}),
+  };
+}
+
+function voidResult(value: unknown): void {
   if (value !== undefined && value !== null) {
-    throw new PrescriptionDocumentsBoundaryError('invalid-response');
+    invalid();
   }
 }
 
-// Lazy lookup: importing this module performs no native work. No state is cached
-// and missing native support never falls back to fabricated JS persistence.
-export const NativePrescriptionDocuments: PrescriptionDocumentsNativeModule = {
+// Lazy native lookup; only reconstructed public metadata crosses this boundary.
+// There is no JS persistence fallback and no legacy commit(candidate) adapter.
+export const NativePrescriptionDocuments: PrescriptionWalletNativeModule = {
+  read: async () => state(await requireNativeModule().read()),
   select: async () => {
-    const candidate: unknown = await requireNativeModule().select();
-    if (candidate === null) {
-      return null;
-    }
-    if (!isIdentifier(candidate)) {
-      throw new PrescriptionDocumentsBoundaryError('invalid-response');
-    }
-    return candidate as PrescriptionCandidateId;
+    const value: unknown = await requireNativeModule().select();
+    return value === null
+      ? null
+      : (identifier(value) as PrescriptionCandidateId);
   },
-  commit: async candidate => {
-    const current: unknown = await requireNativeModule().commit(candidate);
-    if (!isIdentifier(current)) {
-      throw new PrescriptionDocumentsBoundaryError('invalid-response');
-    }
-    return current as PrescriptionId;
+  create: async (candidate, metadata) => {
+    const input = validatePrescriptionMetadata(metadata);
+    return record(
+      await requireNativeModule().create(
+        identifier(candidate) as PrescriptionCandidateId,
+        input,
+      ),
+    );
   },
-  read: async () => validateState(await requireNativeModule().read()),
-  cleanup: async () => validateVoid(await requireNativeModule().cleanup()),
+  replace: async (candidate, expected) =>
+    record(
+      await requireNativeModule().replace(
+        identifier(candidate) as PrescriptionCandidateId,
+        record(expected),
+      ),
+    ),
+  updateMetadata: async (expected, metadata) => {
+    const input = validatePrescriptionMetadata(metadata);
+    return record(
+      await requireNativeModule().updateMetadata(record(expected), input),
+    );
+  },
+  remove: async expected =>
+    voidResult(await requireNativeModule().remove(record(expected))),
+  migrateLegacy: async (document, metadata) => {
+    const input = validatePrescriptionMetadata(metadata);
+    return record(
+      await requireNativeModule().migrateLegacy(
+        identifier(document) as PrescriptionDocumentId,
+        input,
+      ),
+    );
+  },
+  cleanup: async () => voidResult(await requireNativeModule().cleanup()),
   release: async candidate =>
-    validateVoid(await requireNativeModule().release(candidate)),
-  open: async current => validateVoid(await requireNativeModule().open(current)),
+    voidResult(
+      await requireNativeModule().release(
+        identifier(candidate) as PrescriptionCandidateId,
+      ),
+    ),
+  open: async document =>
+    voidResult(
+      await requireNativeModule().open(
+        identifier(document) as PrescriptionDocumentId,
+      ),
+    ),
 };

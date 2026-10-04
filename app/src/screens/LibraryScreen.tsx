@@ -109,7 +109,7 @@ function LibraryScreen({
                   color: theme.colours.textSecondary,
                 },
               ]}>
-              View, import or replace your current prescription.
+              View, add or manage your saved prescriptions.
             </Text>
           </AppCard>
         </Pressable>

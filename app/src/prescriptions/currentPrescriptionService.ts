@@ -1,5 +1,5 @@
-// Legacy single-document workflow used only by the existing screen/native adapter.
-// New domain code uses prescription.ts and prescriptionService.ts instead.
+// Historical single-document workflow retained for regression tests only.
+// Application code uses prescription.ts and prescriptionService.ts instead.
 declare const prescriptionId: unique symbol;
 declare const candidateId: unique symbol;
 

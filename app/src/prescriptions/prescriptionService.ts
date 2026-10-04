@@ -9,10 +9,11 @@ import {
 
 export interface PrescriptionWalletState {
   readonly records: readonly PrescriptionRecord[];
+  readonly legacyDocumentId?: PrescriptionDocumentId;
   readonly pendingCleanup: readonly PrescriptionDocumentId[];
 }
 
-/** Intended durable boundary; the existing single-current native API cannot implement it.
+/** Durable collection boundary implemented by native storage.
  * Mutations must be atomic, reject while cleanup is pending and preserve other records.
  * create allocates a fresh stable record ID and document ID. replace retains metadata
  * and record ID, allocates a fresh document ID and journals the superseded document.
@@ -20,8 +21,9 @@ export interface PrescriptionWalletState {
  * transaction and reject stale snapshots (value equality, not object identity).
  * updateMetadata changes only validated metadata, preserving both IDs; it performs
  * no document/candidate operations and does not create or process cleanup entries.
- * remove journals its document alongside removal. Failed mutations leave state intact
- * and no partial copy. Candidates are never consumed by mutations.
+ * remove journals its document alongside removal. Failed pre-publication mutations
+ * leave state intact and no partial copy. Uncertain publication preserves copies
+ * and requires a reload. Candidates are never consumed by mutations.
  * cleanup is idempotent, removes only journalled unreferenced app-owned documents,
  * durably clears completed entries and preserves pending entries on failure.
  * Adapters own interrupted-commit recovery, orphan candidate/copy cleanup, file
@@ -43,6 +45,10 @@ export interface PrescriptionWalletStore {
     metadata: PrescriptionMetadata,
   ): Promise<PrescriptionRecord>;
   cleanup(): Promise<void>;
+  migrateLegacy?(
+    document: PrescriptionDocumentId,
+    metadata: PrescriptionMetadata,
+  ): Promise<PrescriptionRecord>;
 }
 
 export interface PrescriptionDocuments {
@@ -61,7 +67,13 @@ type Dependencies = {
 };
 
 export class PrescriptionWalletOperationError extends Error {
-  constructor(public readonly code: 'busy' | 'cleanup-pending' | 'not-found') {
+  constructor(
+    public readonly code:
+      | 'busy'
+      | 'cleanup-pending'
+      | 'not-found'
+      | 'migration-required',
+  ) {
     super(code);
     this.name = 'PrescriptionWalletOperationError';
   }
@@ -69,6 +81,7 @@ export class PrescriptionWalletOperationError extends Error {
 
 type ImportOutcome =
   | { status: 'saved' | 'cleanup-pending'; record: PrescriptionRecord }
+  | { status: 'verification-required' }
   | { status: 'cancelled'; reason: 'selection' | 'confirmation' }
   | {
       status: 'failed';
@@ -113,6 +126,9 @@ export function createPrescriptionService({
   }
   async function writableState() {
     const state = await store.read();
+    if (state.legacyDocumentId !== undefined) {
+      throw new PrescriptionWalletOperationError('migration-required');
+    }
     if (state.pendingCleanup.length > 0) {
       throw new PrescriptionWalletOperationError('cleanup-pending');
     }
@@ -162,6 +178,14 @@ export function createPrescriptionService({
           ? await store.replace(candidate!, existing)
           : await store.create(candidate!, validated!);
       } catch (error) {
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          error.code === 'prescription_documents_commit_uncertain'
+        ) {
+          return { status: 'verification-required' };
+        }
         return { status: 'failed', stage: 'commit', error };
       }
       return {
@@ -179,6 +203,26 @@ export function createPrescriptionService({
   }
   return {
     getState: () => exclusive(() => store.read()),
+    viewLegacyPrescription: () =>
+      exclusive(async () => {
+        const { legacyDocumentId } = await store.read();
+        if (!legacyDocumentId) {
+          throw new PrescriptionWalletOperationError('not-found');
+        }
+        await documents.open(legacyDocumentId);
+      }),
+    completeLegacyMigration: (
+      document: PrescriptionDocumentId,
+      metadata: PrescriptionMetadata,
+    ) =>
+      exclusive(async () => {
+        const validated = validatePrescriptionMetadata(metadata);
+        if (!store.migrateLegacy) {
+          throw new PrescriptionWalletOperationError('migration-required');
+        }
+        // Native resolves repeated requests from durable state, including lost responses.
+        return store.migrateLegacy(document, validated);
+      }),
     addPrescription: (metadata: PrescriptionMetadata) =>
       exclusive(() => importDocument(metadata)),
     replaceDocument: (id: PrescriptionRecordId) =>
