@@ -84,6 +84,15 @@ private final class Fixture {
 private struct PrescriptionDocumentStorageTests {
   static func main() throws {
     let tests: [(String, () throws -> Void)] = [
+      ("storage-only unnamed to named persists on disk and restart", {
+        try persistedNameUpdate(originalName: nil, newName: "Example label", expiry: "2028-02-29")
+      }),
+      ("storage-only named to renamed persists on disk and restart", {
+        try persistedNameUpdate(originalName: "Example label", newName: "Changed label", expiry: "2028-02-29")
+      }),
+      ("storage-only name and expiry persist together on disk and restart", {
+        try persistedNameUpdate(originalName: "Example label", newName: "Changed label", expiry: "2029-03-01")
+      }),
       ("multiple independent records and unique document IDs", multiple),
       ("unnamed migrated v2 record survives reads, recovery and renaming", unnamedV2),
       ("user names round trip and invalid names fail without mutation", names),
@@ -126,6 +135,53 @@ private struct PrescriptionDocumentStorageTests {
     try check(one.id != two.id && one.documentId != two.documentId, "IDs must be independent")
     try check(one.id != one.documentId, "Record and document IDs must differ")
     try check(try f.restart().readState().records == [one, two], "Both records must survive restart")
+  }
+
+  // Deliberately bypass bridgePayload: a correct response cannot conceal a lost
+  // name in the actual committed JSON or a newly instantiated store's read.
+  static func persistedNameUpdate(originalName: String?, newName: String, expiry: String) throws {
+    let f = try Fixture()
+    let originalMetadata = PrescriptionMetadata(kind: "temporary", medicationIds: ["synthetic-a", "synthetic-b"],
+      expiresOn: "2028-02-29", issuedOn: "2027-01-01", startsOn: "2027-02-01", displayName: originalName)
+    let original = try f.store.create(f.candidate(), metadata: originalMetadata)
+    let originalBytes = try f.bytes(f.document(original.documentId))
+    try check(original.displayName == originalName, "Create initializer lost the original name")
+    try check(original.metadata == originalMetadata, "Record metadata projection lost original metadata")
+    try check(try f.restart().readState().records == [original], "Create did not persist the original record")
+
+    let input = PrescriptionMetadata(kind: original.kind, medicationIds: original.medicationIds,
+      expiresOn: expiry, issuedOn: original.issuedOn, startsOn: original.startsOn, displayName: newName)
+    try check(input.displayName == newName, "Mutation input is missing the new name")
+    let updated = try f.store.updateMetadata(original, metadata: input)
+    try check(updated.displayName == newName, "updateMetadata record reconstruction lost the new name")
+    try check(updated.metadata == input, "Updated record metadata projection lost supplied metadata")
+
+    let data = try f.bytes(f.root.appendingPathComponent("state.json"))
+    guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let records = json["records"] as? [[String: Any]], records.count == 1 else {
+      throw TestFailure.assertion("Committed state.json must contain exactly one record")
+    }
+    let persisted = records[0]
+    try check(persisted["displayName"] as? String == newName, "state.json lost the new displayName")
+    try check(persisted["expiresOn"] as? String == expiry, "state.json lost the requested expiry")
+    try check(persisted["id"] as? String == original.id, "state.json changed the record ID")
+    try check(persisted["documentId"] as? String == original.documentId, "state.json changed the document ID")
+
+    let restarted = f.restart()
+    let state = try restarted.readState()
+    try check(state.records.count == 1, "Restart changed the collection size")
+    let reloaded = state.records[0]
+    try check(reloaded.displayName == newName, "Fresh storage read lost the persisted name")
+    try check(reloaded.id == original.id && reloaded.documentId == original.documentId,
+              "Fresh storage read changed record or document identity")
+    try check(reloaded.metadata == input, "Fresh storage read changed supplied metadata")
+    try check(reloaded.kind == original.kind && reloaded.medicationIds == original.medicationIds
+              && reloaded.issuedOn == original.issuedOn && reloaded.startsOn == original.startsOn,
+              "Rename changed unrelated metadata")
+    try check(try f.bytes(restarted.retainedDocumentURL(for: original.documentId)) == originalBytes,
+              "Rename changed document bytes")
+    try check(state.version == 2 && state.pendingCleanup.isEmpty && state.legacyDocumentId == nil,
+              "Rename changed schema, cleanup or migration state")
   }
 
   static func unnamedV2() throws {
