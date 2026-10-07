@@ -5,7 +5,7 @@ import {
   useWindowDimensions,
   ScrollView,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppCard from '../design-system/components/AppCard';
 import {
@@ -25,7 +25,7 @@ function LibraryScreen({
   onOpenPrescriptionWallet,
 }: LibraryScreenProps) {
   const theme = usePersonalOSTheme();
-  const {width: screenWidth} = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
 
   const horizontalPadding = goldenScreenPadding(screenWidth);
 
@@ -36,14 +36,16 @@ function LibraryScreen({
         {
           backgroundColor: theme.colours.background,
         },
-      ]}>
+      ]}
+    >
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
             paddingHorizontal: horizontalPadding,
           },
-        ]}>
+        ]}
+      >
         <Text
           accessibilityRole="header"
           style={[
@@ -52,7 +54,8 @@ function LibraryScreen({
             {
               color: theme.colours.textPrimary,
             },
-          ]}>
+          ]}
+        >
           Library
         </Text>
 
@@ -60,7 +63,8 @@ function LibraryScreen({
           accessibilityRole="button"
           accessibilityLabel="Open Medication"
           onPress={onOpenMedication}
-          style={styles.entry}>
+          style={styles.entry}
+        >
           <AppCard>
             <Text
               style={[
@@ -69,7 +73,8 @@ function LibraryScreen({
                 {
                   color: theme.colours.textPrimary,
                 },
-              ]}>
+              ]}
+            >
               Medication
             </Text>
 
@@ -79,7 +84,8 @@ function LibraryScreen({
                 {
                   color: theme.colours.textSecondary,
                 },
-              ]}>
+              ]}
+            >
               Check estimated stock, add stock or correct your count.
             </Text>
           </AppCard>
@@ -89,7 +95,8 @@ function LibraryScreen({
           accessibilityRole="button"
           accessibilityLabel="Open Prescriptions"
           onPress={onOpenPrescriptionWallet}
-          style={styles.entry}>
+          style={styles.entry}
+        >
           <AppCard>
             <Text
               style={[
@@ -98,7 +105,8 @@ function LibraryScreen({
                 {
                   color: theme.colours.textPrimary,
                 },
-              ]}>
+              ]}
+            >
               Prescriptions
             </Text>
 
@@ -108,7 +116,8 @@ function LibraryScreen({
                 {
                   color: theme.colours.textSecondary,
                 },
-              ]}>
+              ]}
+            >
               View, add or manage your saved prescriptions.
             </Text>
           </AppCard>
