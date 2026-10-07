@@ -79,16 +79,6 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
     try JSONDecoder().decode(type, from: JSONSerialization.data(withJSONObject: value))
   }
 
-  private func payload(_ record: PrescriptionRecord) -> [String: Any] {
-    var value: [String: Any] = [
-      "id": record.id, "documentId": record.documentId, "kind": record.kind,
-      "medicationIds": record.medicationIds, "expiresOn": record.expiresOn,
-    ]
-    if let issuedOn = record.issuedOn { value["issuedOn"] = issuedOn }
-    if let startsOn = record.startsOn { value["startsOn"] = startsOn }
-    return value
-  }
-
   private func perform(_ resolve: RCTPromiseResolveBlock, _ reject: RCTPromiseRejectBlock,
                        operation: () throws -> Any?) {
     do { resolve(try operation()) }
@@ -110,7 +100,7 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
     perform(resolve, reject) {
       let state = try storage.readState()
       return [
-        "records": state.records.map { payload($0) },
+        "records": try state.records.map { try $0.bridgePayload() },
         "pendingCleanup": state.pendingCleanup,
         "legacyDocumentId": state.legacyDocumentId.map { $0 as Any } ?? NSNull(),
       ] as [String: Any]
@@ -121,7 +111,7 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
   func create(_ candidate: String, metadata: NSDictionary,
               resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
     perform(resolve, reject) {
-      payload(try storage.create(candidate, metadata: decode(metadata, as: PrescriptionMetadata.self)))
+      try storage.create(candidate, metadata: decode(metadata, as: PrescriptionMetadata.self)).bridgePayload()
     }
   }
 
@@ -129,7 +119,7 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
   func replace(_ candidate: String, expected: NSDictionary,
                resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
     perform(resolve, reject) {
-      payload(try storage.replace(candidate, expected: decode(expected, as: PrescriptionRecord.self)))
+      try storage.replace(candidate, expected: decode(expected, as: PrescriptionRecord.self)).bridgePayload()
     }
   }
 
@@ -137,8 +127,8 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
   func updateMetadata(_ expected: NSDictionary, metadata: NSDictionary,
                       resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
     perform(resolve, reject) {
-      payload(try storage.updateMetadata(decode(expected, as: PrescriptionRecord.self),
-                                         metadata: decode(metadata, as: PrescriptionMetadata.self)))
+      try storage.updateMetadata(decode(expected, as: PrescriptionRecord.self),
+                                 metadata: decode(metadata, as: PrescriptionMetadata.self)).bridgePayload()
     }
   }
 
@@ -155,7 +145,7 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
   func migrateLegacy(_ document: String, metadata: NSDictionary,
                      resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
     perform(resolve, reject) {
-      payload(try storage.migrateLegacy(document, metadata: decode(metadata, as: PrescriptionMetadata.self)))
+      try storage.migrateLegacy(document, metadata: decode(metadata, as: PrescriptionMetadata.self)).bridgePayload()
     }
   }
 

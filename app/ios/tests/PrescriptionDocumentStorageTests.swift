@@ -87,6 +87,7 @@ private struct PrescriptionDocumentStorageTests {
       ("multiple independent records and unique document IDs", multiple),
       ("unnamed migrated v2 record survives reads, recovery and renaming", unnamedV2),
       ("user names round trip and invalid names fail without mutation", names),
+      ("names survive bridge decode, update, persistence and restart payloads", metadataBridgeRoundTrip),
       ("replacement preserves metadata and rejects stale document IDs", replacement),
       ("deletion removes only the selected stored copy", deletion),
       ("failed replacement preserves old document and source", failedReplacement),
@@ -188,6 +189,56 @@ private struct PrescriptionDocumentStorageTests {
     let renamed = try f.store.updateMetadata(record, metadata: metadata)
     let replaced = try f.store.replace(f.candidate(), expected: renamed)
     try check(replaced.displayName == "Changed label", "Replacement must retain the user label")
+  }
+
+  static func metadataBridgeRoundTrip() throws {
+    let f = try Fixture()
+    let metadata = PrescriptionMetadata(kind: "temporary", medicationIds: ["synthetic-a", "synthetic-b"],
+      expiresOn: "2028-02-29", issuedOn: "2027-01-01", startsOn: "2027-02-01")
+    let original = try f.store.create(f.candidate(), metadata: metadata)
+    let bytes = try f.bytes(f.document(original.documentId))
+
+    // Exercise the actual serializer used by native read/create/update responses,
+    // then decode the dictionary as the bridge does for the next expected record.
+    func fromBridge(_ record: PrescriptionRecord) throws -> PrescriptionRecord {
+      let payload = try record.bridgePayload()
+      return try JSONDecoder().decode(PrescriptionRecord.self,
+        from: JSONSerialization.data(withJSONObject: payload))
+    }
+    var expected = try fromBridge(f.restart().readState().records[0])
+    try check(expected == original && expected.displayName == nil, "Unnamed native record must decode")
+    try check(try expected.bridgePayload()["displayName"] == nil, "Missing name must be omitted, not invented")
+
+    for (name, expiry) in [("Example label", "2028-02-29"),
+                           ("Changed label", "2028-02-29"),
+                           ("Third label", "2029-03-01")] {
+      var input = try expected.bridgePayload()
+      input["displayName"] = name
+      input["expiresOn"] = expiry
+      let decoded = try JSONDecoder().decode(PrescriptionMetadata.self,
+        from: JSONSerialization.data(withJSONObject: input))
+      try check(decoded.displayName == name, "Incoming bridge metadata must decode the supplied name")
+      let updated = try f.restart().updateMetadata(expected, metadata: decoded)
+      let response = try fromBridge(updated)
+      try check(response.displayName == name && response.expiresOn == expiry,
+                "Mutation response must return both name and expiry")
+      try check(response.id == original.id && response.documentId == original.documentId,
+                "Name updates must preserve both IDs")
+      try check(response.kind == original.kind && response.medicationIds == original.medicationIds
+                && response.issuedOn == original.issuedOn && response.startsOn == original.startsOn,
+                "Name updates must preserve unrelated metadata")
+
+      let saved = try JSONSerialization.jsonObject(with: f.bytes(f.root.appendingPathComponent("state.json"))) as! [String: Any]
+      let savedRecord = (saved["records"] as! [[String: Any]])[0]
+      try check(savedRecord["displayName"] as? String == name && savedRecord["expiresOn"] as? String == expiry,
+                "Committed JSON must contain name and expiry")
+      let restarted = f.restart()
+      expected = try fromBridge(restarted.readState().records[0])
+      try check(expected == response, "Restart/read payload must return the entire updated record")
+      try check(try f.bytes(restarted.retainedDocumentURL(for: expected.documentId)) == bytes,
+                "Every rename must preserve document bytes")
+      try check(try restarted.readState().pendingCleanup.isEmpty, "Renaming must not create cleanup work")
+    }
   }
 
   static func replacement() throws {

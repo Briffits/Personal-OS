@@ -9,6 +9,7 @@ import type {
   PrescriptionRecord,
   PrescriptionMetadata,
 } from '../src/prescriptions/prescription';
+import { createPrescriptionService } from '../src/prescriptions/prescriptionService';
 
 const candidate =
   '00000000-0000-4000-8000-000000000001' as PrescriptionCandidateId;
@@ -110,6 +111,64 @@ test('names survive creation, responses and expected-record snapshots on rename'
     ...metadata,
     displayName: 'Changed label',
   });
+});
+
+test('service and boundary retain names across native reads and subsequent metadata updates', async () => {
+  let saved: PrescriptionRecord = {
+    ...record,
+    kind: 'temporary',
+    medicationIds: ['synthetic-a'],
+    issuedOn: '2027-01-01',
+    startsOn: '2027-02-01',
+  };
+  function restartMockNative() {
+    const native = installNativeMock();
+    native.read.mockImplementation(async () => ({
+      records: [JSON.parse(JSON.stringify(saved))],
+      pendingCleanup: [],
+      legacyDocumentId: null,
+    }));
+    native.updateMetadata.mockImplementation(
+      async (expected: PrescriptionRecord, next: PrescriptionMetadata) => {
+        expect(expected).toEqual(saved);
+        saved = { ...next, id: expected.id, documentId: expected.documentId };
+        return JSON.parse(JSON.stringify(saved));
+      },
+    );
+    return native;
+  }
+  const service = createPrescriptionService({
+    store: boundary,
+    documents: boundary,
+    confirmReplacement: async () => false,
+    confirmDeletion: async () => false,
+  });
+  let native = restartMockNative();
+  for (const [displayName, expiresOn] of [
+    ['Example label', '2028-02-29'],
+    ['Changed label', '2028-02-29'],
+    ['Third label', '2029-03-01'],
+  ]) {
+    const previous = saved;
+    const next: PrescriptionMetadata = {
+      kind: previous.kind,
+      medicationIds: previous.medicationIds,
+      issuedOn: previous.issuedOn,
+      startsOn: previous.startsOn,
+      displayName,
+      expiresOn,
+    };
+    const expected = { ...previous, displayName, expiresOn };
+    await expect(service.updatePrescription(record.id, next)).resolves.toEqual(
+      expected,
+    );
+    expect(native.updateMetadata).toHaveBeenLastCalledWith(previous, next);
+    native = restartMockNative();
+    await expect(service.getState()).resolves.toEqual({
+      records: [expected],
+      pendingCleanup: [],
+    });
+  }
 });
 
 test.each(['', ' \n ', 42, {}, []])(

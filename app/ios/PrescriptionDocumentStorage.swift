@@ -69,6 +69,16 @@ struct PrescriptionRecord: Codable, Equatable {
     }
     try metadata.validate()
   }
+
+  // Use the same public fields for persistence and bridge responses so optional
+  // metadata cannot disappear on read or from the next expected-record snapshot.
+  func bridgePayload() throws -> [String: Any] {
+    let data = try JSONEncoder().encode(self)
+    guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      throw PrescriptionDocumentStorageError.invalidState
+    }
+    return value
+  }
 }
 
 struct PrescriptionDocumentState: Codable, Equatable {

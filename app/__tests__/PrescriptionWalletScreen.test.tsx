@@ -203,6 +203,16 @@ test('named records prefill editing and save only metadata when renamed', async 
     { ...metadata, displayName: 'Changed label' },
   );
   expect(state.records).toEqual([{ ...first, displayName: 'Changed label' }]);
+  expect(card(first.id).props.accessibilityLabel).toContain('Changed label');
+  await act(async () => screen.unmount());
+  await renderScreen();
+  expect(card(first.id).props.accessibilityLabel).toContain('Changed label');
+  await accessibleAction(first.id, 'edit');
+  expect(
+    screen.root.findByProps({
+      accessibilityLabel: 'Prescription name (required)',
+    }).props.value,
+  ).toBe('Changed label');
   expect(native.replace).not.toHaveBeenCalled();
   expect(native.select).not.toHaveBeenCalled();
   expect(native.cleanup).not.toHaveBeenCalled();
@@ -423,6 +433,14 @@ test('Edit details preserves document identity and existing medication relations
     medicationIds: ['synthetic-id'],
     expiresOn: '2099-03-01',
   });
+  expect(card(first.id).props.accessibilityLabel).toBe(
+    'Renamed example, Standard · Expires 1 Mar 2099',
+  );
+  await act(async () => screen.unmount());
+  await renderScreen();
+  expect(card(first.id).props.accessibilityLabel).toBe(
+    'Renamed example, Standard · Expires 1 Mar 2099',
+  );
   expect(native.select).not.toHaveBeenCalled();
   expect(native.replace).not.toHaveBeenCalled();
 });
