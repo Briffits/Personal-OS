@@ -25,6 +25,7 @@ export default function PrescriptionMetadataForm({
   onCancel,
 }: Props) {
   const theme = usePersonalOSTheme();
+  const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
   const [kind, setKind] = useState<PrescriptionMetadata['kind'] | null>(
     initial?.kind ?? null,
   );
@@ -40,7 +41,12 @@ export default function PrescriptionMetadataForm({
         setError('Choose Standard or Temporary.');
         return;
       }
+      if (!displayName.trim()) {
+        setError('Enter a prescription name.');
+        return;
+      }
       metadata = validatePrescriptionMetadata({
+        displayName: displayName.trim(),
         kind,
         // Preserve existing relationships on edits. Linking has no Medication UI yet.
         medicationIds: initial?.medicationIds ?? [],
@@ -63,8 +69,28 @@ export default function PrescriptionMetadataForm({
   return (
     <View style={styles.form}>
       <Text style={[typography.body, { color: theme.colours.textSecondary }]}>
-        Enter the details shown on your prescription. Dates use YYYY-MM-DD.
+        Choose a name to help you identify this prescription. Enter the dates
+        shown on it using YYYY-MM-DD.
       </Text>
+      <Text
+        style={[typography.bodyStrong, { color: theme.colours.textPrimary }]}
+      >
+        Prescription name (required)
+      </Text>
+      <TextInput
+        accessibilityLabel="Prescription name (required)"
+        value={displayName}
+        onChangeText={setDisplayName}
+        editable={!busy}
+        style={[
+          typography.body,
+          styles.input,
+          {
+            color: theme.colours.textPrimary,
+            borderColor: theme.colours.textSecondary,
+          },
+        ]}
+      />
       <Text
         style={[typography.bodyStrong, { color: theme.colours.textPrimary }]}
       >

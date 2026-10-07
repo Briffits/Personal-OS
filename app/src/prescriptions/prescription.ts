@@ -7,6 +7,8 @@ export type PrescriptionDocumentId = string & { readonly [documentId]: true };
 export type PrescriptionCandidateId = string & { readonly [candidateId]: true };
 
 export interface PrescriptionMetadata {
+  // User label only. Absent on existing v2 records until explicitly supplied.
+  readonly displayName?: string;
   readonly kind: 'standard' | 'temporary';
   readonly medicationIds: readonly string[];
   readonly expiresOn: string;
@@ -44,6 +46,9 @@ export function validatePrescriptionMetadata(
 ): PrescriptionMetadata {
   if (
     !value ||
+    (value.displayName !== undefined &&
+      (typeof value.displayName !== 'string' ||
+        value.displayName.trim() === '')) ||
     (value.kind !== 'standard' && value.kind !== 'temporary') ||
     !Array.isArray(value.medicationIds) ||
     value.medicationIds.some(
@@ -62,6 +67,9 @@ export function validatePrescriptionMetadata(
     throw new PrescriptionValidationError();
   }
   return {
+    ...(value.displayName === undefined
+      ? {}
+      : { displayName: value.displayName }),
     kind: value.kind,
     medicationIds: [...value.medicationIds],
     expiresOn: value.expiresOn,

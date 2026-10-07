@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { ActionSheetIOS, Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import PrescriptionWalletScreen from '../src/screens/PrescriptionWalletScreen';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
@@ -145,6 +145,19 @@ async function press(label: string) {
     screen.root.findByProps({ accessibilityLabel: label }).props.onPress(),
   );
 }
+function card(id: string) {
+  return screen.root.findByProps({ testID: `prescription-card-${id}` });
+}
+async function tapCard(id: string) {
+  await act(async () => card(id).props.onPress());
+}
+async function accessibleAction(id: string, actionName: string) {
+  await act(async () =>
+    card(id).props.onAccessibilityAction({
+      nativeEvent: { actionName },
+    }),
+  );
+}
 async function input(label: string, value: string) {
   await act(async () =>
     screen.root
@@ -156,12 +169,136 @@ function content() {
   return JSON.stringify(screen.toJSON());
 }
 
+test('new prescriptions reject missing or blank names before opening Files', async () => {
+  await renderScreen();
+  await press('Add prescription');
+  await press('Standard');
+  await input('Expiry date (required)', '2099-01-01');
+  for (const name of ['', '  \n ']) {
+    await input('Prescription name (required)', name);
+    await press('Save prescription details');
+    expect(content()).toContain('Enter a prescription name');
+    expect(native.select).not.toHaveBeenCalled();
+    expect(native.create).not.toHaveBeenCalled();
+  }
+});
+
+test('named records prefill editing and save only metadata when renamed', async () => {
+  state = {
+    records: [{ ...first, displayName: 'Example label' }],
+    pendingCleanup: [],
+  };
+  await renderScreen();
+  expect(card(first.id).props.accessibilityLabel).toContain('Example label');
+  await accessibleAction(first.id, 'edit');
+  expect(
+    screen.root.findByProps({
+      accessibilityLabel: 'Prescription name (required)',
+    }).props.value,
+  ).toBe('Example label');
+  await input('Prescription name (required)', 'Changed label');
+  await press('Save prescription details');
+  expect(native.updateMetadata).toHaveBeenCalledWith(
+    { ...first, displayName: 'Example label' },
+    { ...metadata, displayName: 'Changed label' },
+  );
+  expect(state.records).toEqual([{ ...first, displayName: 'Changed label' }]);
+  expect(native.replace).not.toHaveBeenCalled();
+  expect(native.select).not.toHaveBeenCalled();
+  expect(native.cleanup).not.toHaveBeenCalled();
+});
+
+test.each([0, 1, 2, 3])(
+  'long press exposes native actions and handles selection %s',
+  async index => {
+    const sheet = jest
+      .spyOn(ActionSheetIOS, 'showActionSheetWithOptions')
+      .mockImplementation(() => {});
+    await renderScreen();
+    await act(async () => card(first.id).props.onLongPress());
+    expect(sheet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: ['Edit details', 'Replace document', 'Delete', 'Cancel'],
+        cancelButtonIndex: 3,
+        destructiveButtonIndex: 2,
+      }),
+      expect.any(Function),
+    );
+    expect(native.open).not.toHaveBeenCalled();
+    alert.mockImplementation((_title, _message, buttons) =>
+      buttons[0].onPress(),
+    );
+    await act(async () => sheet.mock.calls[0][1](index));
+    if (index === 0) {
+      expect(
+        screen.root.findByProps({
+          accessibilityLabel: 'Save prescription details',
+        }),
+      ).toBeDefined();
+    } else if (index === 1 || index === 2) {
+      expect(alert.mock.calls[0][0]).toBe(
+        index === 1 ? 'Replace Prescription' : 'Delete Prescription',
+      );
+    } else {
+      expect(alert).not.toHaveBeenCalled();
+      expect(native.select).not.toHaveBeenCalled();
+    }
+    expect(native.replace).not.toHaveBeenCalled();
+    expect(native.remove).not.toHaveBeenCalled();
+  },
+);
+
+test('cards expose accessible View and mutation actions without visible action buttons', async () => {
+  await renderScreen();
+  expect(card(second.id).props.accessibilityRole).toBe('button');
+  expect(card(second.id).props.accessibilityActions).toEqual([
+    { name: 'activate', label: 'View prescription' },
+    { name: 'edit', label: 'Edit details' },
+    { name: 'replace', label: 'Replace document' },
+    { name: 'delete', label: 'Delete' },
+  ]);
+  await accessibleAction(second.id, 'activate');
+  expect(native.open).toHaveBeenCalledWith(second.documentId);
+  // Only the name, compact metadata and derived badge are rendered as card text.
+  const cardText = card(second.id)
+    .findAllByType(require('react-native').Text)
+    .map(node => node.props.children);
+  expect(cardText).toEqual([
+    'Unnamed prescription',
+    'Temporary · Expires 1 Jan 2000',
+    'EXPIRED',
+  ]);
+});
+
+test('pending cleanup blocks long-press mutations and accessibility mutations while retaining View', async () => {
+  state = { ...state, pendingCleanup: ['old' as PrescriptionDocumentId] };
+  const sheet = jest
+    .spyOn(ActionSheetIOS, 'showActionSheetWithOptions')
+    .mockImplementation(() => {});
+  await renderScreen();
+  expect(card(first.id).props.accessibilityActions).toEqual([
+    { name: 'activate', label: 'View prescription' },
+  ]);
+  await act(async () => card(first.id).props.onLongPress());
+  for (const action of ['edit', 'replace', 'delete']) {
+    await accessibleAction(first.id, action);
+  }
+  expect(sheet).not.toHaveBeenCalled();
+  expect(native.select).not.toHaveBeenCalled();
+  expect(native.remove).not.toHaveBeenCalled();
+  await accessibleAction(first.id, 'activate');
+  expect(native.open).toHaveBeenCalledWith(first.documentId);
+});
+
 test('lists multiple prescriptions, distinguishes kind/expiry and never loads stock or opens documents on entry', async () => {
   await renderScreen();
   expect(content()).toContain('Standard');
   expect(content()).toContain('Temporary');
-  expect(content()).toContain('2000-01-01');
-  expect(content()).toContain('Expired');
+  expect(content()).toContain('1 Jan 2000');
+  expect(content()).toContain('EXPIRED');
+  expect(content()).toContain('Unnamed prescription');
+  expect(card(first.id).props.accessibilityLabel).not.toContain('EXPIRED');
+  expect(card(second.id).props.accessibilityLabel).toContain('EXPIRED');
   for (const label of ['Add Stock', 'Correct Stock']) {
     expect(
       screen.root.findAllByProps({ accessibilityLabel: label }),
@@ -184,10 +321,12 @@ test('Add requires explicitly chosen type and expiry, then retains existing reco
   expect(content()).toContain('Choose Standard or Temporary');
   expect(native.select).not.toHaveBeenCalled();
   await press('Temporary');
+  await input('Prescription name (required)', '  Example label  ');
   await input('Expiry date (required)', '2099-02-28');
   await input('Start date (optional)', '2099-01-01');
   await press('Save prescription details');
   expect(native.create).toHaveBeenCalledWith(candidate, {
+    displayName: 'Example label',
     kind: 'temporary',
     medicationIds: [],
     expiresOn: '2099-02-28',
@@ -201,6 +340,7 @@ test('invalid dates do not open the picker or mutate the wallet', async () => {
   await renderScreen();
   await press('Add prescription');
   await press('Standard');
+  await input('Prescription name (required)', 'Example label');
   await input('Expiry date (required)', '2027-02-29');
   await press('Save prescription details');
   expect(native.select).not.toHaveBeenCalled();
@@ -209,7 +349,7 @@ test('invalid dates do not open the picker or mutate the wallet', async () => {
 
 test('View resolves the selected document, including an expired prescription', async () => {
   await renderScreen();
-  await press('View prescription 2');
+  await tapCard(second.id);
   expect(native.open).toHaveBeenCalledWith(second.documentId);
   expect(state.records).toEqual([first, second]);
   expect(native.remove).not.toHaveBeenCalled();
@@ -224,7 +364,7 @@ test.each([false, true])('Replace requires confirmation: %p', async confirm => {
       buttons[confirm ? 1 : 0].onPress();
     }
   });
-  await press('Replace document for prescription 1');
+  await accessibleAction(first.id, 'replace');
   expect(alert.mock.calls[0][0]).toBe('Replace Prescription');
   if (confirm) {
     expect(native.replace).toHaveBeenCalledWith(candidate, first);
@@ -249,7 +389,7 @@ test.each([false, true])(
         buttons[confirm ? 1 : 0].onPress();
       }
     });
-    await press('Delete prescription 2');
+    await accessibleAction(second.id, 'delete');
     expect(alert.mock.calls[0][0]).toBe('Delete Prescription');
     expect(native.select).not.toHaveBeenCalled();
     if (confirm) {
@@ -268,11 +408,18 @@ test('Edit details preserves document identity and existing medication relations
     pendingCleanup: [],
   };
   await renderScreen();
-  await press('Edit details for prescription 1');
+  await accessibleAction(first.id, 'edit');
+  expect(
+    screen.root.findByProps({
+      accessibilityLabel: 'Prescription name (required)',
+    }).props.value,
+  ).toBe('');
+  await input('Prescription name (required)', 'Renamed example');
   await input('Expiry date (required)', '2099-03-01');
   await press('Save prescription details');
   expect(state.records[0]).toEqual({
     ...first,
+    displayName: 'Renamed example',
     medicationIds: ['synthetic-id'],
     expiresOn: '2099-03-01',
   });
@@ -299,6 +446,7 @@ test('legacy document stays viewable while required metadata is missing or migra
   await press('Save prescription details');
   expect(native.migrateLegacy).not.toHaveBeenCalled();
   await press('Standard');
+  await input('Prescription name (required)', 'Example label');
   await input('Expiry date (required)', '2099-01-01');
   native.migrateLegacy.mockRejectedValueOnce(new Error('Commit failed'));
   await press('Save prescription details');
@@ -307,10 +455,10 @@ test('legacy document stays viewable while required metadata is missing or migra
   await press('View saved prescription');
   expect(native.open).toHaveBeenCalledTimes(2);
   await press('Save prescription details');
-  expect(native.migrateLegacy).toHaveBeenLastCalledWith(
-    first.documentId,
-    metadata,
-  );
+  expect(native.migrateLegacy).toHaveBeenLastCalledWith(first.documentId, {
+    ...metadata,
+    displayName: 'Example label',
+  });
   expect(state.records).toHaveLength(1);
   expect(state.legacyDocumentId).toBeUndefined();
 });
@@ -324,7 +472,7 @@ test.each([false, true])(
         ? 'prescription_documents_authentication_cancelled'
         : 'prescription_documents_authentication_failed',
     });
-    await press('View prescription 1');
+    await tapCard(first.id);
     expect(native.select).not.toHaveBeenCalled();
     expect(native.create).not.toHaveBeenCalled();
     expect(native.replace).not.toHaveBeenCalled();
@@ -349,7 +497,7 @@ test('cleanup-pending allows view, blocks mutations and offers retry', async () 
     screen.root.findByProps({ accessibilityLabel: 'Add prescription' }).props
       .disabled,
   ).toBe(true);
-  await press('View prescription 1');
+  await tapCard(first.id);
   expect(native.open).toHaveBeenCalled();
   await press('Retry document cleanup');
   expect(native.cleanup).toHaveBeenCalled();
@@ -368,15 +516,14 @@ test('failed reads show retry without enabling mutation or pretending the wallet
     screen.root.findAllByProps({ accessibilityLabel: 'Add prescription' }),
   ).toHaveLength(0);
   await press('Retry loading prescriptions');
-  expect(
-    screen.root.findByProps({ accessibilityLabel: 'View prescription 1' }),
-  ).toBeDefined();
+  expect(card(first.id)).toBeDefined();
 });
 
 test('candidate release failure preserves a saved import and exposes explicit retry', async () => {
   await renderScreen();
   await press('Add prescription');
   await press('Standard');
+  await input('Prescription name (required)', 'Example label');
   await input('Expiry date (required)', '2099-01-01');
   native.release.mockRejectedValueOnce(new Error('Release'));
   await press('Save prescription details');
@@ -416,6 +563,7 @@ test('cancelled selection preserves the collection and entered details', async (
   await renderScreen();
   await press('Add prescription');
   await press('Standard');
+  await input('Prescription name (required)', 'Example label');
   await input('Expiry date (required)', '2099-01-01');
   await press('Save prescription details');
   expect(native.create).not.toHaveBeenCalled();
@@ -430,6 +578,7 @@ test('uncertain publication reloads the collection without claiming the save fai
   await renderScreen();
   await press('Add prescription');
   await press('Standard');
+  await input('Prescription name (required)', 'Example label');
   await input('Expiry date (required)', '2099-01-01');
   const create = native.create.getMockImplementation()!;
   native.create.mockImplementationOnce(async (...args) => {
@@ -441,9 +590,7 @@ test('uncertain publication reloads the collection without claiming the save fai
   expect(content()).toContain('The change may have been saved');
   expect(native.release).toHaveBeenCalledWith(candidate);
   expect(alert).not.toHaveBeenCalled();
-  expect(
-    screen.root.findByProps({ accessibilityLabel: 'View prescription 3' }),
-  ).toBeDefined();
+  expect(card('record-new')).toBeDefined();
 });
 
 test('lost migration response reloads the committed record while keeping the original document accessible', async () => {
@@ -460,11 +607,12 @@ test('lost migration response reloads the committed record while keeping the ori
   await renderScreen();
   await press('Complete prescription details');
   await press('Standard');
+  await input('Prescription name (required)', 'Example label');
   await input('Expiry date (required)', '2099-01-01');
   await press('Save prescription details');
   expect(state.records).toHaveLength(1);
   expect(content()).toContain('The change may have been saved');
-  await press('View prescription 1');
+  await tapCard('migrated');
   expect(native.open).toHaveBeenCalledWith(first.documentId);
   expect(native.migrateLegacy).toHaveBeenCalledTimes(1);
 });

@@ -85,6 +85,8 @@ private struct PrescriptionDocumentStorageTests {
   static func main() throws {
     let tests: [(String, () throws -> Void)] = [
       ("multiple independent records and unique document IDs", multiple),
+      ("unnamed migrated v2 record survives reads, recovery and renaming", unnamedV2),
+      ("user names round trip and invalid names fail without mutation", names),
       ("replacement preserves metadata and rejects stale document IDs", replacement),
       ("deletion removes only the selected stored copy", deletion),
       ("failed replacement preserves old document and source", failedReplacement),
@@ -123,6 +125,69 @@ private struct PrescriptionDocumentStorageTests {
     try check(one.id != two.id && one.documentId != two.documentId, "IDs must be independent")
     try check(one.id != one.documentId, "Record and document IDs must differ")
     try check(try f.restart().readState().records == [one, two], "Both records must survive restart")
+  }
+
+  static func unnamedV2() throws {
+    let f = try Fixture()
+    // Seed the exact older v2 shape, independently of the current encoder.
+    try f.seedDocument(f.legacy)
+    let id = "00000000-0000-4000-8000-000000000003"
+    let oldRecord: [String: Any] = [
+      "id": id, "documentId": f.legacy, "kind": "standard",
+      "medicationIds": [String](), "expiresOn": "2028-02-29"
+    ]
+    let old: [String: Any] = ["version": 2, "records": [oldRecord], "pendingCleanup": [String]()]
+    let stateURL = f.root.appendingPathComponent("state.json")
+    let originalState = try JSONSerialization.data(withJSONObject: old)
+    try originalState.write(to: stateURL)
+    let originalDocument = try f.bytes(f.document(f.legacy))
+    let store = f.restart()
+    let record = try store.readState().records[0]
+    try check(record.displayName == nil, "Reading must not invent a name")
+    try store.recoverOrphans()
+    try check(try f.bytes(stateURL) == originalState, "Reading/recovery must not rewrite old v2")
+    try check(try f.bytes(store.retainedDocumentURL(for: f.legacy)) == originalDocument,
+              "Already migrated document must remain viewable")
+    try check(try store.migrateLegacy(f.legacy, metadata: f.metadata) == record,
+              "Unnamed migration retry must remain idempotent")
+    var metadata = record.metadata
+    metadata.displayName = "Example label"
+    let named = try store.updateMetadata(record, metadata: metadata)
+    try check(named.id == id && named.documentId == f.legacy, "Rename must preserve both IDs")
+    try check(try f.restart().readState().records == [named], "Name must survive restart")
+    try check(try f.bytes(store.retainedDocumentURL(for: f.legacy)) == originalDocument,
+              "Rename must preserve document bytes")
+    try check(try store.readState().pendingCleanup.isEmpty, "Rename must not create cleanup work")
+    try conflicts { _ = try store.updateMetadata(record, metadata: metadata) }
+    try conflicts { try store.remove(record) }
+    try check(try store.readState().version == 2, "Optional name must not bump schema version")
+  }
+
+  static func names() throws {
+    let f = try Fixture()
+    var metadata = f.metadata
+    metadata.displayName = "Example label"
+    let record = try f.store.create(f.candidate(), metadata: metadata)
+    try check(try f.restart().readState().records[0].displayName == "Example label", "Create must persist name")
+    let originalDocument = try f.bytes(f.document(record.documentId))
+    let originalState = try f.bytes(f.root.appendingPathComponent("state.json"))
+    for name in ["", " \n\t "] {
+      metadata.displayName = name
+      try fails { _ = try f.store.updateMetadata(record, metadata: metadata) }
+      try fails { _ = try f.store.create(f.candidate(), metadata: metadata) }
+    }
+    let malformed = Data(#"{"kind":"standard","medicationIds":[],"expiresOn":"2028-02-29","displayName":42}"#.utf8)
+    try fails { _ = try JSONDecoder().decode(PrescriptionMetadata.self, from: malformed) }
+    try check(try f.bytes(f.root.appendingPathComponent("state.json")) == originalState, "Invalid names must preserve state")
+    metadata.displayName = "Changed label"
+    f.failCommit = true
+    try fails { _ = try f.store.updateMetadata(record, metadata: metadata) }
+    try check(try f.bytes(f.document(record.documentId)) == originalDocument, "Failed rename must preserve bytes")
+    try check(try f.restart().readState().records == [record], "Failed rename must preserve previous name")
+    f.failCommit = false
+    let renamed = try f.store.updateMetadata(record, metadata: metadata)
+    let replaced = try f.store.replace(f.candidate(), expected: renamed)
+    try check(replaced.displayName == "Changed label", "Replacement must retain the user label")
   }
 
   static func replacement() throws {

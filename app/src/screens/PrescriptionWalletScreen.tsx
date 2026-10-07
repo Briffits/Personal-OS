@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,13 +24,13 @@ import {
   type PrescriptionWalletState,
 } from '../prescriptions/prescriptionService';
 import {
-  isPrescriptionExpired,
   type PrescriptionCandidateId,
   type PrescriptionMetadata,
   type PrescriptionRecord,
 } from '../prescriptions/prescription';
 import { NativePrescriptionDocuments } from '../native/NativePrescriptionDocuments';
 import PrescriptionMetadataForm from '../components/PrescriptionMetadataForm';
+import PrescriptionCard from '../components/PrescriptionCard';
 
 function confirmChange(action: 'Replace' | 'Delete'): Promise<boolean> {
   return new Promise(resolve => {
@@ -405,75 +404,39 @@ export default function PrescriptionWalletScreen({
                 No prescriptions saved. Add one to keep it available here.
               </Text>
             )}
-            {wallet?.records.map((record, index) => (
-              <AppCard key={record.id} style={styles.card}>
-                <Text
-                  accessibilityRole="header"
-                  style={[
-                    typography.cardTitle,
-                    { color: theme.colours.textPrimary },
-                  ]}
-                >
-                  {record.kind === 'standard' ? 'Standard' : 'Temporary'}{' '}
-                  prescription {index + 1}
-                </Text>
-                <Text style={textStyle}>Expires: {record.expiresOn}</Text>
-                {isPrescriptionExpired(record, today) && (
-                  <Text style={textStyle}>Expired</Text>
-                )}
-                {record.issuedOn && (
-                  <Text style={textStyle}>Issued: {record.issuedOn}</Text>
-                )}
-                {record.startsOn && (
-                  <Text style={textStyle}>Starts: {record.startsOn}</Text>
-                )}
-                <View style={styles.actions}>
-                  <WalletAction
-                    label={'View prescription ' + (index + 1)}
-                    disabled={busy}
-                    onPress={() =>
-                      run(async () =>
-                        prescriptionService.viewPrescription(record.id),
-                      )
+            {wallet?.records.map(record => (
+              <PrescriptionCard
+                key={record.id}
+                record={record}
+                today={today}
+                busy={busy}
+                mutationDisabled={mutationDisabled}
+                onView={() =>
+                  run(() => prescriptionService.viewPrescription(record.id))
+                }
+                onEdit={() => setEditor({ mode: 'edit', record })}
+                onReplace={() =>
+                  run(async () =>
+                    handleImport(
+                      await prescriptionService.replaceDocument(record.id),
+                    ),
+                  )
+                }
+                onDelete={() =>
+                  run(async () => {
+                    const result = await prescriptionService.deletePrescription(
+                      record.id,
+                    );
+                    if (result.status !== 'cancelled') {
+                      setNotice(
+                        result.status === 'deleted'
+                          ? 'Prescription deleted.'
+                          : 'Prescription deleted. Document cleanup needs to be retried.',
+                      );
                     }
-                  />
-                  <WalletAction
-                    label={'Edit details for prescription ' + (index + 1)}
-                    disabled={mutationDisabled}
-                    onPress={() => setEditor({ mode: 'edit', record })}
-                  />
-                  <WalletAction
-                    label={'Replace document for prescription ' + (index + 1)}
-                    disabled={mutationDisabled}
-                    onPress={() =>
-                      run(async () =>
-                        handleImport(
-                          await prescriptionService.replaceDocument(record.id),
-                        ),
-                      )
-                    }
-                  />
-                  <WalletAction
-                    label={'Delete prescription ' + (index + 1)}
-                    disabled={mutationDisabled}
-                    onPress={() =>
-                      run(async () => {
-                        const result =
-                          await prescriptionService.deletePrescription(
-                            record.id,
-                          );
-                        if (result.status !== 'cancelled') {
-                          setNotice(
-                            result.status === 'deleted'
-                              ? 'Prescription deleted.'
-                              : 'Prescription deleted. Document cleanup needs to be retried.',
-                          );
-                        }
-                      })
-                    }
-                  />
-                </View>
-              </AppCard>
+                  })
+                }
+              />
             ))}
           </>
         )}
@@ -493,6 +456,5 @@ const styles = StyleSheet.create({
   content: { paddingBottom: spacing.xxl },
   title: { marginTop: spacing.sm, marginBottom: spacing.xl },
   card: { marginVertical: spacing.md },
-  actions: { gap: spacing.sm },
   action: { minHeight: layout.minimumTouchTarget, justifyContent: 'center' },
 });

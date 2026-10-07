@@ -8,11 +8,14 @@ The collection domain is now connected to native storage and the Prescriptions U
 
 This implementation is **pending Mac/Xcode and physical-iPhone validation**. JavaScript tests use mocked native capabilities. Native storage tests are provided separately; they must be compiled and run on a Mac. They do not validate iOS Data Protection or Face ID.
 
+Manual simulator collection testing passed before the display-name/card refinement. The refinement requires a fresh Mac native storage test run and simulator UI checks, including the existing migrated record, VoiceOver actions and large Dynamic Type. No native validation of this refinement has been performed in the Linux workspace.
+
 ## Domain and native boundary
 
 `prescription.ts` defines stable record IDs, separate opaque document/candidate IDs and validated metadata:
 
 - kind: standard or temporary;
+- displayName: user label only, with no inferred medical meaning; optional in storage for existing v2 records;
 - medicationIds: unique non-blank IDs, including an empty list;
 - expiresOn: required real YYYY-MM-DD date;
 - issuedOn: optional, on or before expiry;
@@ -46,6 +49,8 @@ The existing app-private `PrescriptionDocuments/state.json` is the sole committe
 
 Optional issuedOn/startsOn are omitted when absent. Documents still use the existing `documents/<UUID>/document.pdf|jpg|png` containers. Candidates remain in the separate `candidates/<UUID>` namespace. These are internal native paths and never cross the bridge.
 
+`displayName` is an additive optional string in the same version-2 record. Swift Codable decodes missing names as nil and omits nil when encoding. TypeScript accepts absence and preserves supplied non-blank strings; native validation also rejects blank names and decoding rejects non-string values. Existing unnamed records remain readable/viewable without a migration or read-time rewrite. “Unnamed prescription” is a UI fallback only and is never fabricated into metadata. The form requires an explicit non-blank name and trims surrounding whitespace before saving. Renaming uses the existing metadata-only transaction, preserving record ID, document ID and document bytes. Full-record comparisons include the optional name. Collection, migration, protection and cleanup semantics are unchanged; no simulator data reset is needed.
+
 A transitional version 2 state may instead contain `records: []`, `legacyDocumentId: "<legacy document UUID>"` and a cleanup array. No incomplete prescription record is inserted. The bridge represents no pending legacy item as null; the TypeScript adapter omits the optional property.
 
 Every retained document ID, record ID and cleanup ID must be valid and unique in its respective set. Cleanup IDs cannot overlap retained documents or the legacy reference. An empty collection with pending deletion cleanup is valid.
@@ -56,7 +61,7 @@ The old format is an unversioned object with optional `current` and `pendingClea
 
 The UI shows **Saved prescription — details needed**. The user can view it through the existing authenticated native `open` path before completing metadata, including after a failed completion attempt. Normal collection mutations are blocked until completion. Existing legacy cleanup debt must be retried first; that operation preserves the legacy reference.
 
-The form requires explicit kind and expiry. It does not prefill dates or invent medication links. New/migrated records are unlinked; optional dates are included only when entered. Existing medication links are preserved when editing metadata; medication linking UI is deferred until it can use real Medication IDs.
+The form requires an explicit user label, kind and expiry. It does not prefill dates or invent medication links. New/migrated records are unlinked; optional dates are included only when entered. Existing medication links are preserved when editing metadata; medication linking UI is deferred until it can use real Medication IDs.
 
 `migrateLegacy` validates metadata, checks the expected legacy reference and existing document, allocates a new record ID, and atomically publishes a version 2 state referencing the **same stored document**. It never copies, moves, modifies or deletes that document.
 
@@ -87,7 +92,7 @@ Native authentication retains the tested `LAContext.deviceOwnerAuthentication` p
 
 ## UI
 
-Library navigation remains unchanged. Prescriptions lists standard/temporary records, required expiry and supplied optional dates, with a derived Expired indication. Each record offers View, Edit details, Replace document and confirmed Delete. Add uses the metadata form then Files selection. Replacement also requires explicit confirmation. The screen contains no medication stock controls.
+Library navigation remains unchanged. Each prescription card shows only its user label (or “Unnamed prescription”), a compact kind/expiry line and a prominent bordered EXPIRED label when applicable. Tapping opens the existing protected native viewer. Long press opens the native iOS action sheet with Edit details, Replace document, Delete and Cancel. VoiceOver can activate View and invoke named Edit/Replace/Delete accessibility actions without a long press. Delete and replacement still require their existing separate confirmations. Text scales and wraps without fixed heights or line limits. Optional dates remain editable in details. Add uses the metadata form then Files selection. The screen contains no medication stock controls.
 
 Expiry refreshes while the screen is open and on app activation. Failed loading shows Retry rather than a fabricated empty wallet. Pending cleanup blocks mutations while retaining viewing access.
 

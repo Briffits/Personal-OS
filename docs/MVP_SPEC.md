@@ -102,6 +102,7 @@ Prescription Wallet is a standalone collection of retained documents, separate f
 
 Each prescription has a stable `PrescriptionRecordId`, a separate opaque document ID and metadata:
 
+- `displayName`: a user-defined label, required by the entry/edit form; optional in persisted v2 records for compatibility, with “Unnamed prescription” shown when absent;
 - `kind`: `standard` or `temporary`;
 - `medicationIds`: a readonly array of unique, non-blank medication IDs;
 - `expiresOn`: required;

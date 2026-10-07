@@ -8,6 +8,8 @@ struct PrescriptionMetadata: Codable, Equatable {
   let expiresOn: String
   let issuedOn: String?
   let startsOn: String?
+  // Additive v2 field: synthesized Codable accepts absence and omits nil on encode.
+  var displayName: String? = nil
 
   static func isDate(_ value: String) -> Bool {
     guard value.range(of: #"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"#, options: .regularExpression) != nil else {
@@ -23,6 +25,7 @@ struct PrescriptionMetadata: Codable, Equatable {
 
   func validate() throws {
     guard ["standard", "temporary"].contains(kind),
+          displayName.map({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) ?? true,
           Set(medicationIds).count == medicationIds.count,
           medicationIds.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
           Self.isDate(expiresOn),
@@ -41,10 +44,11 @@ struct PrescriptionRecord: Codable, Equatable {
   let expiresOn: String
   let issuedOn: String?
   let startsOn: String?
+  let displayName: String?
 
   var metadata: PrescriptionMetadata {
     PrescriptionMetadata(kind: kind, medicationIds: medicationIds, expiresOn: expiresOn,
-                         issuedOn: issuedOn, startsOn: startsOn)
+                         issuedOn: issuedOn, startsOn: startsOn, displayName: displayName)
   }
 
   init(id: String, documentId: String, metadata: PrescriptionMetadata) {
@@ -55,6 +59,7 @@ struct PrescriptionRecord: Codable, Equatable {
     expiresOn = metadata.expiresOn
     issuedOn = metadata.issuedOn
     startsOn = metadata.startsOn
+    displayName = metadata.displayName
   }
 
   func validate() throws {

@@ -76,6 +76,62 @@ afterEach(() => {
   NativeModules.PrescriptionDocuments = originalModule;
 });
 
+test('existing unnamed v2 records remain readable and viewable without a fabricated name', async () => {
+  const native = installNativeMock();
+  const result = await boundary.read();
+  expect(result.records).toEqual([record]);
+  expect(result.records[0]).not.toHaveProperty('displayName');
+  await boundary.open(result.records[0].documentId);
+  expect(native.open).toHaveBeenCalledWith(document);
+  expect(native.updateMetadata).not.toHaveBeenCalled();
+  expect(native.migrateLegacy).not.toHaveBeenCalled();
+});
+
+test('names survive creation, responses and expected-record snapshots on rename', async () => {
+  const native = installNativeMock();
+  const named = { ...record, displayName: 'Example label' };
+  native.create.mockResolvedValue(named);
+  await expect(
+    boundary.create(candidate, { ...metadata, displayName: 'Example label' }),
+  ).resolves.toEqual(named);
+  expect(native.create).toHaveBeenCalledWith(candidate, {
+    ...metadata,
+    displayName: 'Example label',
+  });
+  const renamed = { ...named, displayName: 'Changed label' };
+  native.updateMetadata.mockResolvedValue(renamed);
+  await expect(
+    boundary.updateMetadata(named, {
+      ...metadata,
+      displayName: 'Changed label',
+    }),
+  ).resolves.toEqual(renamed);
+  expect(native.updateMetadata).toHaveBeenCalledWith(named, {
+    ...metadata,
+    displayName: 'Changed label',
+  });
+});
+
+test.each(['', ' \n ', 42, {}, []])(
+  'rejects malformed names at both boundaries: %p',
+  async displayName => {
+    const native = installNativeMock();
+    const invalid = { ...metadata, displayName } as PrescriptionMetadata;
+    await expect(boundary.create(candidate, invalid)).rejects.toThrow();
+    await expect(boundary.updateMetadata(record, invalid)).rejects.toThrow();
+    expect(native.create).not.toHaveBeenCalled();
+    expect(native.updateMetadata).not.toHaveBeenCalled();
+    native.read.mockResolvedValue({
+      records: [{ ...record, displayName }],
+      pendingCleanup: [],
+      legacyDocumentId: null,
+    });
+    await expect(boundary.read()).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
+  },
+);
+
 test.each([undefined, null, {}])('unavailable module: %p', async native => {
   NativeModules.PrescriptionDocuments = native;
   for (const operation of operations) {
