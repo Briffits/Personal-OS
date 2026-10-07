@@ -1,14 +1,14 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
-  View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AppCard from '../design-system/components/AppCard';
 import {
   goldenScreenPadding,
@@ -17,299 +17,434 @@ import {
   typography,
   usePersonalOSTheme,
 } from '../design-system';
-
 import {
-  createCurrentPrescriptionService,
-  PrescriptionOperationError,
-} from '../prescriptions/currentPrescriptionService';
-import {NativePrescriptionDocuments} from '../native/NativePrescriptionDocuments';
-function confirmPrescriptionReplacement(): Promise<boolean> {
+  createPrescriptionService,
+  PrescriptionWalletOperationError,
+  type PrescriptionImportResult,
+  type PrescriptionWalletState,
+} from '../prescriptions/prescriptionService';
+import {
+  type PrescriptionCandidateId,
+  type PrescriptionMetadata,
+  type PrescriptionRecord,
+} from '../prescriptions/prescription';
+import { NativePrescriptionDocuments } from '../native/NativePrescriptionDocuments';
+import PrescriptionMetadataForm from '../components/PrescriptionMetadataForm';
+import PrescriptionCard from '../components/PrescriptionCard';
+
+function confirmChange(action: 'Replace' | 'Delete'): Promise<boolean> {
   return new Promise(resolve => {
     Alert.alert(
-      'Replace Prescription',
-      'This will replace the prescription currently stored in Personal OS.',
+      action + ' Prescription',
+      action === 'Delete'
+        ? 'Delete this saved prescription from Personal OS? The original source document will not be deleted.'
+        : 'Replace the document for this prescription? Its details will stay the same.',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => resolve(false),
-        },
-        {
-          text: 'Replace',
-          style: 'destructive',
-          onPress: () => resolve(true),
-        },
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: action, style: 'destructive', onPress: () => resolve(true) },
       ],
-      {
-        cancelable: true,
-        onDismiss: () => resolve(false),
-      },
+      { cancelable: true, onDismiss: () => resolve(false) },
     );
   });
 }
-const prescriptionService = createCurrentPrescriptionService({
+
+const prescriptionService = createPrescriptionService({
   store: NativePrescriptionDocuments,
-  selector: NativePrescriptionDocuments,
-  viewer: NativePrescriptionDocuments,
-  confirmReplacement: confirmPrescriptionReplacement,
+  documents: NativePrescriptionDocuments,
+  confirmReplacement: () => confirmChange('Replace'),
+  confirmDeletion: () => confirmChange('Delete'),
 });
 
-type PrescriptionWalletScreenProps = {
-  onBack: () => void;
-};
-function PrescriptionWalletScreen({
-  onBack,
-}: PrescriptionWalletScreenProps) {
-  const theme = usePersonalOSTheme();
-  const {width: screenWidth} = useWindowDimensions();
-
-  const horizontalPadding = goldenScreenPadding(screenWidth);
-
-  const handlePrescriptionAction = async () => {
-    try {
-      const viewResult = await prescriptionService.viewPrescription();
-
-      if (viewResult === 'opened') {
-        return;
-      }
-
-      const result = await prescriptionService.importPrescription();
-
-      if (result.status === 'saved') {
-        Alert.alert(
-          'Prescription saved',
-          'Your prescription is now stored in Personal OS.',
-        );
-        return;
-      }
-
-      if (result.status === 'cleanup-pending') {
-        Alert.alert(
-          'Prescription saved',
-          'Your new prescription was saved, but Personal OS still needs to finish cleaning up the previous copy.',
-        );
-        return;
-      }
-
-if (result.status === 'candidate-release-failed') {
-  const prescriptionWasSaved =
-    result.outcome.status === 'saved' ||
-    result.outcome.status === 'cleanup-pending';
-
-  Alert.alert(
-    prescriptionWasSaved
-      ? 'Prescription saved'
-      : 'Temporary file cleanup incomplete',
-    prescriptionWasSaved
-      ? 'Your prescription was saved, but some temporary file cleanup could not finish.'
-      : 'Personal OS could not remove its temporary import copy.',
-  );
-  return;
+function localDate() {
+  const date = new Date();
+  return [
+    String(date.getFullYear()).padStart(4, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
-      if (result.status === 'failed') {
-        Alert.alert(
-          'Unable to save prescription',
-          'Personal OS could not complete the prescription import.',
+function WalletAction({
+  label,
+  onPress,
+  disabled = false,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const theme = usePersonalOSTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={styles.action}
+    >
+      <Text style={[typography.bodyStrong, { color: theme.colours.primary }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+type Editor =
+  | { mode: 'add' | 'migrate' }
+  | { mode: 'edit'; record: PrescriptionRecord };
+
+export default function PrescriptionWalletScreen({
+  onBack,
+}: {
+  onBack: () => void;
+}) {
+  const theme = usePersonalOSTheme();
+  const { width } = useWindowDimensions();
+  const [wallet, setWallet] = useState<PrescriptionWalletState | null>(null);
+  const [busy, setBusy] = useState(true);
+  const busyRef = useRef(true);
+  const mounted = useRef(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [releasePending, setReleasePending] =
+    useState<PrescriptionCandidateId | null>(null);
+  const [notice, setNotice] = useState('');
+  const [today, setToday] = useState(localDate);
+
+  async function reload() {
+    try {
+      const next = await prescriptionService.getState();
+      if (mounted.current) {
+        setWallet(next);
+        setLoadFailed(false);
+        setEditor(current =>
+          current?.mode === 'migrate' && !next.legacyDocumentId
+            ? null
+            : current,
         );
       }
-    } catch (error) {
-      if (
-        error instanceof PrescriptionOperationError &&
-        error.code === 'busy'
-      ) {
-        return;
+    } catch {
+      if (mounted.current) {
+        setWallet(null);
+        setLoadFailed(true);
       }
+    }
+  }
 
-      if (
+  useEffect(() => {
+    mounted.current = true;
+    reload().finally(() => {
+      if (mounted.current) {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    });
+    const timer = setInterval(() => setToday(localDate()), 60_000);
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        setToday(localDate());
+      }
+    });
+    return () => {
+      mounted.current = false;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, []);
+
+  async function run(operation: () => Promise<void>) {
+    if (busyRef.current) {
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    setNotice('');
+    try {
+      await operation();
+    } catch (error) {
+      const uncertain =
         typeof error === 'object' &&
         error !== null &&
         'code' in error &&
-        error.code === 'prescription_documents_authentication_cancelled'
+        error.code === 'prescription_documents_commit_uncertain';
+      const cancelled =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'prescription_documents_authentication_cancelled';
+      if (uncertain) {
+        setEditor(null);
+        setNotice(
+          'The change may have been saved. Check the reloaded wallet before trying again.',
+        );
+      } else if (
+        !cancelled &&
+        !(
+          error instanceof PrescriptionWalletOperationError &&
+          error.code === 'busy'
+        )
       ) {
-        return;
-      }
-
-      Alert.alert(
-        'Unable to open prescription',
-        'Personal OS could not access the prescription wallet.',
-      );
-    }
-  };
-
-  const handleReplacePrescription = async () => {
-    try {
-        const result = await prescriptionService.importPrescription();
-
-        if (result.status === 'saved') {
         Alert.alert(
-        'Prescription saved',
-        'Your current prescription has been updated.',
-      );
-      return;
+          'Unable to complete prescription action',
+          'Your prescription could not be accessed or changed. Please try again.',
+        );
+      }
+    } finally {
+      await reload();
+      if (mounted.current) {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
+  }
 
-    if (result.status === 'cleanup-pending') {
-      Alert.alert(
-        'Prescription saved',
-        'Your new prescription was saved, but Personal OS still needs to finish cleaning up the previous copy.',
-      );
-      return;
-    }
-
+  function handleImport(result: PrescriptionImportResult) {
+    const outcome =
+      result.status === 'candidate-release-failed' ? result.outcome : result;
     if (result.status === 'candidate-release-failed') {
-      const prescriptionWasSaved =
-        result.outcome.status === 'saved' ||
-        result.outcome.status === 'cleanup-pending';
-
-      Alert.alert(
-        prescriptionWasSaved
-          ? 'Prescription saved'
-          : 'Temporary file cleanup incomplete',
-        prescriptionWasSaved
-          ? 'Your prescription was saved, but some temporary file cleanup could not finish.'
-          : 'Personal OS could not remove its temporary import copy.',
-      );
-      return;
+      setReleasePending(result.candidate);
+      setNotice('Temporary import cleanup needs to be retried.');
     }
-
-    if (result.status === 'failed') {
+    if (outcome.status === 'saved' || outcome.status === 'cleanup-pending') {
+      setEditor(null);
+      if (result.status !== 'candidate-release-failed') {
+        setNotice(
+          outcome.status === 'saved'
+            ? 'Prescription saved.'
+            : 'Prescription saved. Document cleanup needs to be retried.',
+        );
+      }
+    } else if (outcome.status === 'verification-required') {
+      setEditor(null);
+      setNotice(
+        'The change may have been saved. Check the reloaded wallet before trying again.',
+      );
+    } else if (outcome.status === 'failed') {
       Alert.alert(
         'Unable to save prescription',
-        'Personal OS could not complete the prescription import.',
+        'The prescription was not saved. Please try again.',
       );
     }
-  } catch (error) {
-    if (
-      error instanceof PrescriptionOperationError &&
-      error.code === 'busy'
-    ) {
-      return;
-    }
-
-    if (
-      error instanceof PrescriptionOperationError &&
-      error.code === 'cleanup-pending'
-    ) {
-      Alert.alert(
-        'Cleanup required',
-        'Personal OS must finish cleaning up the previous prescription before another replacement can be made.',
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Unable to replace prescription',
-      'Personal OS could not start the prescription replacement.',
-    );
   }
-};
-return (
+
+  async function saveDetails(metadata: PrescriptionMetadata) {
+    await run(async () => {
+      if (editor?.mode === 'add') {
+        handleImport(await prescriptionService.addPrescription(metadata));
+      } else if (editor?.mode === 'edit') {
+        await prescriptionService.updatePrescription(
+          editor.record.id,
+          metadata,
+        );
+        setEditor(null);
+        setNotice('Prescription details saved.');
+      } else if (editor?.mode === 'migrate' && wallet?.legacyDocumentId) {
+        await prescriptionService.completeLegacyMigration(
+          wallet.legacyDocumentId,
+          metadata,
+        );
+        setEditor(null);
+        setNotice('Saved prescription details completed.');
+      }
+    });
+  }
+
+  const mutationDisabled =
+    busy ||
+    wallet === null ||
+    !!wallet.legacyDocumentId ||
+    !!wallet.pendingCleanup.length ||
+    releasePending !== null;
+  const textStyle = [typography.body, { color: theme.colours.textPrimary }];
+  return (
     <SafeAreaView
-      style={[
-        styles.safeArea,
-        {
-          backgroundColor: theme.colours.background,
-        },
-      ]}>
+      style={[styles.safeArea, { backgroundColor: theme.colours.background }]}
+    >
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          {
-            paddingHorizontal: horizontalPadding,
-          },
+          { paddingHorizontal: goldenScreenPadding(width) },
         ]}
-        showsVerticalScrollIndicator={false}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Library"
+        keyboardShouldPersistTaps="handled"
+      >
+        <WalletAction
+          label="Back to Library"
           onPress={onBack}
-          style={styles.backButton}>
-          <Text
-            style={[
-              typography.bodyStrong,
-              {
-                color: theme.colours.primary,
-              },
-            ]}>
-            Back
-          </Text>
-        </Pressable>
-
+          disabled={busy}
+        />
         <Text
           accessibilityRole="header"
           style={[
             typography.screenTitle,
             styles.title,
-            {
-              color: theme.colours.textPrimary,
-            },
-          ]}>
+            { color: theme.colours.textPrimary },
+          ]}
+        >
           Prescriptions
         </Text>
-
-        <AppCard>
-          <Text
-            style={[
-              typography.cardTitle,
-              {color: theme.colours.textPrimary},
-            ]}>
-            Current prescription
+        {loadFailed && (
+          <AppCard style={styles.card}>
+            <Text style={textStyle}>
+              Prescriptions could not be loaded. Your saved documents have not
+              been removed.
+            </Text>
+            <WalletAction
+              label="Retry loading prescriptions"
+              disabled={busy}
+              onPress={() => run(async () => {})}
+            />
+          </AppCard>
+        )}
+        {busy && wallet === null && !loadFailed && (
+          <Text style={textStyle}>Loading prescriptions…</Text>
+        )}
+        {notice !== '' && (
+          <Text accessibilityRole="alert" style={textStyle}>
+            {notice}
           </Text>
-          <Text
-            style={[
-              typography.body,
-              styles.description,
-              {color: theme.colours.textSecondary},
-            ]}>
-            View your saved prescription, or import one if none is saved yet.
-          </Text>
-
-          <View style={styles.actions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="View Prescription"
-              onPress={handlePrescriptionAction}
-              style={styles.actionButton}>
-              <Text
-                style={[
-                  typography.bodyStrong,
-                  {
-                    color: theme.colours.primary,
-                  },
-                ]}>
-                View Prescription
+        )}
+        {wallet && wallet.pendingCleanup.length > 0 && (
+          <AppCard style={styles.card}>
+            <Text style={textStyle}>
+              A saved change needs document cleanup. You can still view retained
+              prescriptions.
+            </Text>
+            <WalletAction
+              label="Retry document cleanup"
+              disabled={busy}
+              onPress={() =>
+                run(async () => {
+                  if (!(await prescriptionService.retryCleanup())) {
+                    setNotice('Cleanup could not finish. Please try again.');
+                  }
+                })
+              }
+            />
+          </AppCard>
+        )}
+        {releasePending && (
+          <WalletAction
+            label="Retry temporary cleanup"
+            disabled={busy}
+            onPress={() =>
+              run(async () => {
+                await prescriptionService.retryCandidateRelease(releasePending);
+                setReleasePending(null);
+              })
+            }
+          />
+        )}
+        {wallet?.legacyDocumentId && (
+          <AppCard style={styles.card}>
+            <Text
+              style={[
+                typography.cardTitle,
+                { color: theme.colours.textPrimary },
+              ]}
+            >
+              Saved prescription — details needed
+            </Text>
+            <Text style={textStyle}>
+              Your saved document is still available. Choose its type and enter
+              the expiry date shown on it.
+            </Text>
+            <WalletAction
+              label="View saved prescription"
+              disabled={busy}
+              onPress={() =>
+                run(async () => prescriptionService.viewLegacyPrescription())
+              }
+            />
+            {editor === null && (
+              <WalletAction
+                label="Complete prescription details"
+                disabled={busy || wallet.pendingCleanup.length > 0}
+                onPress={() => setEditor({ mode: 'migrate' })}
+              />
+            )}
+          </AppCard>
+        )}
+        {editor ? (
+          <AppCard style={styles.card}>
+            <Text
+              accessibilityRole="header"
+              style={[
+                typography.cardTitle,
+                { color: theme.colours.textPrimary },
+              ]}
+            >
+              {editor.mode === 'add'
+                ? 'Add prescription'
+                : 'Prescription details'}
+            </Text>
+            <PrescriptionMetadataForm
+              busy={
+                busy ||
+                wallet === null ||
+                !!wallet.pendingCleanup.length ||
+                releasePending !== null
+              }
+              initial={editor.mode === 'edit' ? editor.record : undefined}
+              onSave={saveDetails}
+              onCancel={() => setEditor(null)}
+            />
+          </AppCard>
+        ) : (
+          <>
+            {wallet && (
+              <WalletAction
+                label="Add prescription"
+                disabled={mutationDisabled}
+                onPress={() => setEditor({ mode: 'add' })}
+              />
+            )}
+            {wallet?.records.length === 0 && !wallet.legacyDocumentId && (
+              <Text style={textStyle}>
+                No prescriptions saved. Add one to keep it available here.
               </Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Replace Prescription"
-              onPress={handleReplacePrescription}
-              style={styles.actionButton}>
-              <Text
-                style={[
-                  typography.bodyStrong,
-                  {
-                    color: theme.colours.primary,
-                  },
-                ]}>
-                Replace Prescription
-              </Text>
-            </Pressable>
-
-          </View>
-        </AppCard>
-
+            )}
+            {wallet?.records.map(record => (
+              <PrescriptionCard
+                key={record.id}
+                record={record}
+                today={today}
+                busy={busy}
+                mutationDisabled={mutationDisabled}
+                onView={() =>
+                  run(() => prescriptionService.viewPrescription(record.id))
+                }
+                onEdit={() => setEditor({ mode: 'edit', record })}
+                onReplace={() =>
+                  run(async () =>
+                    handleImport(
+                      await prescriptionService.replaceDocument(record.id),
+                    ),
+                  )
+                }
+                onDelete={() =>
+                  run(async () => {
+                    const result = await prescriptionService.deletePrescription(
+                      record.id,
+                    );
+                    if (result.status !== 'cancelled') {
+                      setNotice(
+                        result.status === 'deleted'
+                          ? 'Prescription deleted.'
+                          : 'Prescription deleted. Document cleanup needs to be retried.',
+                      );
+                    }
+                  })
+                }
+              />
+            ))}
+          </>
+        )}
         <Text
-          style={[
-            typography.caption,
-            styles.note,
-            {
-              color: theme.colours.textSecondary,
-            },
-          ]}>
-            Your current prescription is stored privately on this device.
+          style={[typography.caption, { color: theme.colours.textSecondary }]}
+        >
+          Documents are stored privately on this device. Expiry does not delete
+          a prescription.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -317,34 +452,9 @@ return (
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  content: {
-    paddingBottom: spacing.xxl,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    minHeight: layout.minimumTouchTarget,
-    justifyContent: 'center',
-  },
-  title: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.xxl,
-  },
-  description: {
-    marginVertical: spacing.lg,
-  },
-  actions: {
-    gap: spacing.sm,
-  },
-  actionButton: {
-    minHeight: layout.minimumTouchTarget,
-    justifyContent: 'center',
-  },
-  note: {
-    marginTop: spacing.lg,
-  },
+  safeArea: { flex: 1 },
+  content: { paddingBottom: spacing.xxl },
+  title: { marginTop: spacing.sm, marginBottom: spacing.xl },
+  card: { marginVertical: spacing.md },
+  action: { minHeight: layout.minimumTouchTarget, justifyContent: 'center' },
 });
-
-export default PrescriptionWalletScreen;

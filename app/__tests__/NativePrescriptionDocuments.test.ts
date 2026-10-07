@@ -5,19 +5,53 @@ import {
 } from '../src/native/NativePrescriptionDocuments';
 import type {
   PrescriptionCandidateId,
-  PrescriptionId,
-} from '../src/prescriptions/currentPrescriptionService';
+  PrescriptionDocumentId,
+  PrescriptionRecord,
+  PrescriptionMetadata,
+} from '../src/prescriptions/prescription';
+import { createPrescriptionService } from '../src/prescriptions/prescriptionService';
 
-const candidate = ' test-candidate\t' as PrescriptionCandidateId;
-const current = '\n test-current ' as PrescriptionId;
+const candidate =
+  '00000000-0000-4000-8000-000000000001' as PrescriptionCandidateId;
+const document =
+  '00000000-0000-4000-8000-000000000002' as PrescriptionDocumentId;
+const metadata: PrescriptionMetadata = {
+  kind: 'standard',
+  medicationIds: [],
+  expiresOn: '2028-02-29',
+};
+const record = {
+  ...metadata,
+  id: '00000000-0000-4000-8000-000000000003',
+  documentId: document,
+} as PrescriptionRecord;
 const originalModule = NativeModules.PrescriptionDocuments;
-const methods = ['select', 'commit', 'read', 'cleanup', 'release', 'open'] as const;
+const methods = [
+  'select',
+  'read',
+  'create',
+  'replace',
+  'remove',
+  'updateMetadata',
+  'migrateLegacy',
+  'cleanup',
+  'release',
+  'open',
+] as const;
 
 function installNativeMock() {
   const native = {
     select: jest.fn().mockResolvedValue(candidate),
-    commit: jest.fn().mockResolvedValue(current),
-    read: jest.fn().mockResolvedValue({ current, pendingCleanup: null }),
+    read: jest.fn().mockResolvedValue({
+      records: [record],
+      pendingCleanup: [],
+      legacyDocumentId: null,
+    }),
+    create: jest.fn().mockResolvedValue(record),
+    replace: jest.fn().mockResolvedValue(record),
+    remove: jest.fn().mockResolvedValue(undefined),
+    updateMetadata: jest.fn().mockResolvedValue(record),
+    migrateLegacy: jest.fn().mockResolvedValue(record),
     cleanup: jest.fn().mockResolvedValue(undefined),
     release: jest.fn().mockResolvedValue(undefined),
     open: jest.fn().mockResolvedValue(undefined),
@@ -28,142 +62,384 @@ function installNativeMock() {
 
 const operations = [
   () => boundary.select(),
-  () => boundary.commit(candidate),
   () => boundary.read(),
+  () => boundary.create(candidate, metadata),
+  () => boundary.replace(candidate, record),
+  () => boundary.remove(record),
+  () => boundary.updateMetadata(record, metadata),
+  () => boundary.migrateLegacy(document, metadata),
   () => boundary.cleanup(),
   () => boundary.release(candidate),
-  () => boundary.open(current),
+  () => boundary.open(document),
 ];
 
 afterEach(() => {
   NativeModules.PrescriptionDocuments = originalModule;
 });
 
+test('existing unnamed v2 records remain readable and viewable without a fabricated name', async () => {
+  const native = installNativeMock();
+  const result = await boundary.read();
+  expect(result.records).toEqual([record]);
+  expect(result.records[0]).not.toHaveProperty('displayName');
+  await boundary.open(result.records[0].documentId);
+  expect(native.open).toHaveBeenCalledWith(document);
+  expect(native.updateMetadata).not.toHaveBeenCalled();
+  expect(native.migrateLegacy).not.toHaveBeenCalled();
+});
+
+test('names survive creation, responses and expected-record snapshots on rename', async () => {
+  const native = installNativeMock();
+  const named = { ...record, displayName: 'Example label' };
+  native.create.mockResolvedValue(named);
+  await expect(
+    boundary.create(candidate, { ...metadata, displayName: 'Example label' }),
+  ).resolves.toEqual(named);
+  expect(native.create).toHaveBeenCalledWith(candidate, {
+    ...metadata,
+    displayName: 'Example label',
+  });
+  const renamed = { ...named, displayName: 'Changed label' };
+  native.updateMetadata.mockResolvedValue(renamed);
+  await expect(
+    boundary.updateMetadata(named, {
+      ...metadata,
+      displayName: 'Changed label',
+    }),
+  ).resolves.toEqual(renamed);
+  expect(native.updateMetadata).toHaveBeenCalledWith(named, {
+    ...metadata,
+    displayName: 'Changed label',
+  });
+});
+
+test('service and boundary retain names across native reads and subsequent metadata updates', async () => {
+  let saved: PrescriptionRecord = {
+    ...record,
+    kind: 'temporary',
+    medicationIds: ['synthetic-a'],
+    issuedOn: '2027-01-01',
+    startsOn: '2027-02-01',
+  };
+  function restartMockNative() {
+    const native = installNativeMock();
+    native.read.mockImplementation(async () => ({
+      records: [JSON.parse(JSON.stringify(saved))],
+      pendingCleanup: [],
+      legacyDocumentId: null,
+    }));
+    native.updateMetadata.mockImplementation(
+      async (expected: PrescriptionRecord, next: PrescriptionMetadata) => {
+        expect(expected).toEqual(saved);
+        saved = { ...next, id: expected.id, documentId: expected.documentId };
+        return JSON.parse(JSON.stringify(saved));
+      },
+    );
+    return native;
+  }
+  const service = createPrescriptionService({
+    store: boundary,
+    documents: boundary,
+    confirmReplacement: async () => false,
+    confirmDeletion: async () => false,
+  });
+  let native = restartMockNative();
+  for (const [displayName, expiresOn] of [
+    ['Example label', '2028-02-29'],
+    ['Changed label', '2028-02-29'],
+    ['Third label', '2029-03-01'],
+  ]) {
+    const previous = saved;
+    const next: PrescriptionMetadata = {
+      kind: previous.kind,
+      medicationIds: previous.medicationIds,
+      issuedOn: previous.issuedOn,
+      startsOn: previous.startsOn,
+      displayName,
+      expiresOn,
+    };
+    const expected = { ...previous, displayName, expiresOn };
+    await expect(service.updatePrescription(record.id, next)).resolves.toEqual(
+      expected,
+    );
+    expect(native.updateMetadata).toHaveBeenLastCalledWith(previous, next);
+    native = restartMockNative();
+    await expect(service.getState()).resolves.toEqual({
+      records: [expected],
+      pendingCleanup: [],
+    });
+  }
+});
+
+test.each(['', ' \n ', 42, {}, []])(
+  'rejects malformed names at both boundaries: %p',
+  async displayName => {
+    const native = installNativeMock();
+    const invalid = { ...metadata, displayName } as PrescriptionMetadata;
+    await expect(boundary.create(candidate, invalid)).rejects.toThrow();
+    await expect(boundary.updateMetadata(record, invalid)).rejects.toThrow();
+    expect(native.create).not.toHaveBeenCalled();
+    expect(native.updateMetadata).not.toHaveBeenCalled();
+    native.read.mockResolvedValue({
+      records: [{ ...record, displayName }],
+      pendingCleanup: [],
+      legacyDocumentId: null,
+    });
+    await expect(boundary.read()).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
+  },
+);
+
 test.each([undefined, null, {}])('unavailable module: %p', async native => {
   NativeModules.PrescriptionDocuments = native;
   for (const operation of operations) {
-    await expect(operation()).rejects.toBeInstanceOf(PrescriptionDocumentsBoundaryError);
+    await expect(operation()).rejects.toBeInstanceOf(
+      PrescriptionDocumentsBoundaryError,
+    );
     await expect(operation()).rejects.toMatchObject({ code: 'unavailable' });
   }
 });
 
-test.each(methods)('incomplete module missing %s rejects before delegation', async method => {
+test.each(methods)(
+  'incomplete module missing %s rejects before delegation',
+  async method => {
+    const native = installNativeMock();
+    NativeModules.PrescriptionDocuments = { ...native, [method]: undefined };
+    for (const operation of operations) {
+      await expect(operation()).rejects.toMatchObject({ code: 'unavailable' });
+    }
+    Object.values(native).forEach(mock => expect(mock).not.toHaveBeenCalled());
+  },
+);
+
+test('delegates explicit collection operations with opaque handles and full expected records', async () => {
   const native = installNativeMock();
-  NativeModules.PrescriptionDocuments = { ...native, [method]: undefined };
   for (const operation of operations) {
-    await expect(operation()).rejects.toMatchObject({ code: 'unavailable' });
+    await operation();
   }
-  for (const mock of Object.values(native)) {
-    expect(mock).not.toHaveBeenCalled();
-  }
+  expect(native.create).toHaveBeenCalledWith(candidate, metadata);
+  expect(native.replace).toHaveBeenCalledWith(candidate, record);
+  expect(native.remove).toHaveBeenCalledWith(record);
+  expect(native.updateMetadata).toHaveBeenCalledWith(record, metadata);
+  expect(native.migrateLegacy).toHaveBeenCalledWith(document, metadata);
+  expect(native.open).toHaveBeenCalledWith(document);
+  expect(native.release).toHaveBeenCalledWith(candidate);
 });
 
-test('delegates explicit operations and preserves identifiers unchanged', async () => {
-  const native = installNativeMock();
-  await expect(boundary.select()).resolves.toBe(candidate);
-  await expect(boundary.commit(candidate)).resolves.toBe(current);
-  expect(native.cleanup).not.toHaveBeenCalled();
-  expect(native.release).not.toHaveBeenCalled();
-  await boundary.cleanup();
-  await boundary.release(candidate);
-  await boundary.open(current);
-  expect(native.select.mock.calls).toEqual([[]]);
-  expect(native.commit.mock.calls).toEqual([[candidate]]);
-  expect(native.cleanup.mock.calls).toEqual([[]]);
-  expect(native.release.mock.calls).toEqual([[candidate]]);
-  expect(native.open.mock.calls).toEqual([[current]]);
-});
-
-test('selection cancellation returns null without other operations', async () => {
+test('selection cancellation has no document mutations', async () => {
   const native = installNativeMock();
   native.select.mockResolvedValue(null);
   await expect(boundary.select()).resolves.toBeNull();
-  expect(native.commit).not.toHaveBeenCalled();
+  expect(native.create).not.toHaveBeenCalled();
   expect(native.release).not.toHaveBeenCalled();
 });
 
+const malformedIdentifiers = [
+  undefined,
+  '',
+  ' ',
+  '\t\n',
+  42,
+  false,
+  {},
+  [],
+  ['id'],
+  '/private/document.pdf',
+  'file:///private/document.pdf',
+];
+test.each(malformedIdentifiers)(
+  'rejects malformed selection %p',
+  async value => {
+    installNativeMock().select.mockResolvedValue(value);
+    await expect(boundary.select()).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
+  },
+);
+
+test.each(['create', 'replace', 'updateMetadata', 'migrateLegacy'] as const)(
+  'rejects malformed %s responses',
+  async method => {
+    const native = installNativeMock();
+    const operation = () =>
+      method === 'create'
+        ? boundary.create(candidate, metadata)
+        : method === 'replace'
+        ? boundary.replace(candidate, record)
+        : method === 'updateMetadata'
+        ? boundary.updateMetadata(record, metadata)
+        : boundary.migrateLegacy(document, metadata);
+    for (const value of [
+      null,
+      {},
+      { ...record, id: document },
+      { ...record, documentId: '/private/file' },
+      { ...record, expiresOn: '2027-02-29' },
+      { ...record, medicationIds: ['a', 'a'] },
+      { ...record, startsOn: '2027-01-01' },
+    ]) {
+      native[method].mockResolvedValue(value);
+      await expect(operation()).rejects.toMatchObject({
+        code: 'invalid-response',
+      });
+    }
+  },
+);
+
 test.each([
-  { current: null, pendingCleanup: null },
-  { current, pendingCleanup: null },
-  { current, pendingCleanup: ' test-superseded\n' },
-])('accepts valid state without transforming IDs: %p', async state => {
-  const native = installNativeMock();
-  native.read.mockResolvedValue(state);
-  await expect(boundary.read()).resolves.toEqual(state);
-  expect(native.read.mock.calls).toEqual([[]]);
-});
-
-const malformedIdentifiers = [undefined, '', ' ', '\t\n\r', '\u00a0', 42, false, {}, [], ['id']];
-
-async function expectInvalid(response: Promise<unknown>) {
-  await expect(response).rejects.toBeInstanceOf(PrescriptionDocumentsBoundaryError);
-  await expect(response).rejects.toMatchObject({
-    code: 'invalid-response',
-    message: 'Prescription document handling returned an invalid response.',
-  });
-}
-
-test.each(malformedIdentifiers)('rejects malformed selection: %p', async value => {
-  installNativeMock().select.mockResolvedValue(value);
-  await expectInvalid(boundary.select());
-});
-
-test.each([null, ...malformedIdentifiers])('rejects malformed commit: %p', async value => {
-  installNativeMock().commit.mockResolvedValue(value);
-  await expectInvalid(boundary.commit(candidate));
-});
-
-test.each([
-  undefined, null, 'state', 42, false, [], {},
-  { current: null },
-  { pendingCleanup: null },
-  { current: null, pendingCleanup: 'superseded' },
-  ...malformedIdentifiers.map(value => ({ current: value, pendingCleanup: null })),
-  ...malformedIdentifiers.map(value => ({ current, pendingCleanup: value })),
-  ...malformedIdentifiers.map(value => ({ current: null, pendingCleanup: value })),
-])('rejects malformed state: %p', async value => {
+  undefined,
+  null,
+  'state',
+  [],
+  {},
+  { records: [], pendingCleanup: [] },
+  { records: [record, record], pendingCleanup: [], legacyDocumentId: null },
+  { records: [record], pendingCleanup: [document], legacyDocumentId: null },
+  { records: [record], pendingCleanup: [], legacyDocumentId: document },
+  { records: [], pendingCleanup: [document, document], legacyDocumentId: null },
+  { records: [], pendingCleanup: [], legacyDocumentId: '/private/file' },
+])('rejects malformed/inconsistent state %p', async value => {
   installNativeMock().read.mockResolvedValue(value);
-  await expectInvalid(boundary.read());
+  await expect(boundary.read()).rejects.toMatchObject({
+    code: 'invalid-response',
+  });
 });
 
-test.each([null, current])('additional native fields do not escape: %p', async id => {
+test('accepts multiple records, pending deletion of the last record, and explicit legacy state', async () => {
   const native = installNativeMock();
-  native.read.mockResolvedValue({ current: id, pendingCleanup: null, extra: 'ignored' });
-  await expect(boundary.read()).resolves.toEqual({ current: id, pendingCleanup: null });
+  const other = {
+    ...record,
+    id: '00000000-0000-4000-8000-000000000004',
+    documentId: '00000000-0000-4000-8000-000000000005',
+  };
+  native.read.mockResolvedValue({
+    records: [record, other],
+    pendingCleanup: [],
+    legacyDocumentId: null,
+  });
+  await expect(boundary.read()).resolves.toEqual({
+    records: [record, other],
+    pendingCleanup: [],
+  });
+  native.read.mockResolvedValue({
+    records: [],
+    pendingCleanup: [document],
+    legacyDocumentId: null,
+  });
+  await expect(boundary.read()).resolves.toEqual({
+    records: [],
+    pendingCleanup: [document],
+  });
+  native.read.mockResolvedValue({
+    records: [],
+    pendingCleanup: [],
+    legacyDocumentId: document,
+  });
+  await expect(boundary.read()).resolves.toEqual({
+    records: [],
+    pendingCleanup: [],
+    legacyDocumentId: document,
+  });
+  await boundary.open(document);
+  expect(native.open).toHaveBeenCalledWith(document);
 });
 
-test('looks up native module lazily and does not cache state', async () => {
+test('reconstructs only public fields in responses and mutation arguments', async () => {
+  const native = installNativeMock();
+  native.read.mockResolvedValue({
+    records: [{ ...record, extra: 'ignored' }],
+    pendingCleanup: [],
+    legacyDocumentId: null,
+    extra: 'ignored',
+  });
+  await expect(boundary.read()).resolves.toEqual({
+    records: [record],
+    pendingCleanup: [],
+  });
+  await boundary.create(candidate, {
+    ...metadata,
+    extra: 'ignored',
+  } as PrescriptionMetadata);
+  await boundary.replace(candidate, {
+    ...record,
+    extra: 'ignored',
+  } as PrescriptionRecord);
+  expect(native.create).toHaveBeenCalledWith(candidate, metadata);
+  expect(native.replace).toHaveBeenCalledWith(candidate, record);
+});
+
+test('rejects invalid input metadata before native mutation, including migration', async () => {
+  const native = installNativeMock();
+  for (const input of [
+    { ...metadata, expiresOn: '' },
+    { ...metadata, issuedOn: '2029-01-01' },
+  ]) {
+    await expect(boundary.create(candidate, input)).rejects.toThrow();
+    await expect(boundary.updateMetadata(record, input)).rejects.toThrow();
+    await expect(boundary.migrateLegacy(document, input)).rejects.toThrow();
+  }
+  expect(native.create).not.toHaveBeenCalled();
+  expect(native.updateMetadata).not.toHaveBeenCalled();
+  expect(native.migrateLegacy).not.toHaveBeenCalled();
+});
+
+test('looks up the module lazily and never caches state', async () => {
   const first = installNativeMock();
-  await expect(boundary.read()).resolves.toEqual({ current, pendingCleanup: null });
+  await boundary.read();
   const second = installNativeMock();
-  second.read.mockResolvedValue({ current: null, pendingCleanup: null });
-  await expect(boundary.read()).resolves.toEqual({ current: null, pendingCleanup: null });
+  second.read.mockResolvedValue({
+    records: [],
+    pendingCleanup: [],
+    legacyDocumentId: null,
+  });
+  await expect(boundary.read()).resolves.toEqual({
+    records: [],
+    pendingCleanup: [],
+  });
   expect(first.read).toHaveBeenCalledTimes(1);
-  second.read.mockResolvedValue(undefined);
-  await expectInvalid(boundary.read());
 });
 
-test.each(['cleanup', 'release', 'open'] as const)('validates void %s results', async method => {
+test.each(['cleanup', 'release', 'open', 'remove'] as const)(
+  'validates void %s results',
+  async method => {
+    const native = installNativeMock();
+    const operation = () =>
+      method === 'cleanup'
+        ? boundary.cleanup()
+        : method === 'release'
+        ? boundary.release(candidate)
+        : method === 'remove'
+        ? boundary.remove(record)
+        : boundary.open(document);
+    for (const value of [null, undefined]) {
+      native[method].mockResolvedValue(value);
+      await expect(operation()).resolves.toBeUndefined();
+    }
+    for (const value of [false, 0, '', {}, []]) {
+      native[method].mockResolvedValue(value);
+      await expect(operation()).rejects.toMatchObject({
+        code: 'invalid-response',
+      });
+    }
+  },
+);
+
+test.each([
+  'prescription_documents_authentication_cancelled',
+  'prescription_documents_authentication_failed',
+])('native authentication result propagates unchanged: %s', async code => {
   const native = installNativeMock();
-  const operation = () => method === 'cleanup'
-    ? boundary.cleanup()
-    : method === 'release' ? boundary.release(candidate) : boundary.open(current);
-  for (const value of [null, undefined]) {
-    native[method].mockResolvedValue(value);
-    await expect(operation()).resolves.toBeUndefined();
-  }
-  for (const value of [false, 0, '', {}, []]) {
-    native[method].mockResolvedValue(value);
-    await expectInvalid(operation());
-  }
+  const failure = { code };
+  native.open.mockRejectedValue(failure);
+  await expect(boundary.open(document)).rejects.toBe(failure);
+  expect(native.select).not.toHaveBeenCalled();
 });
 
-test('propagates genuine native operation failures unchanged', async () => {
+test('propagates genuine operation failures unchanged', async () => {
   const native = installNativeMock();
   const failure = new Error('Native operation failed');
-  for (const method of Object.values(native)) {
-    method.mockRejectedValue(failure);
-  }
+  Object.values(native).forEach(method => method.mockRejectedValue(failure));
   for (const operation of operations) {
     await expect(operation()).rejects.toBe(failure);
   }

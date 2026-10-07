@@ -16,28 +16,15 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
     super.init()
 
     do {
-      try storage.cleanupOrphanedCandidates()
+      try storage.recoverOrphans()
     } catch {
-      // Keep the module usable. A future module initialization will retry orphan cleanup.
-    }
-
-    do {
-      try storage.cleanupOrphanedDocuments()
-    } catch {
-      // Keep the module usable. A future module initialization will retry orphan cleanup.
+      // Fail closed: unreadable state must not cause retained documents to be removed.
+      // Recovery is retried on the next module initialization.
     }
   }
   @objc
   static func requiresMainQueueSetup() -> Bool {
     false
-  }
-
-  private func rejectNotImplemented(_ reject: RCTPromiseRejectBlock) {
-    reject(
-      "prescription_documents_not_implemented",
-      "Prescription document handling is not implemented yet.",
-      nil
-    )
   }
 
   @objc(select:rejecter:)
@@ -88,107 +75,89 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
     }
   }
 
-  @objc(commit:resolver:rejecter:)
-  func commit(
-    _ candidate: String,
-    resolver resolve: RCTPromiseResolveBlock,
-    rejecter reject: RCTPromiseRejectBlock
-  ) {
-    do {
-      let current = try storage.commitCandidate(candidate)
-      resolve(current)
-    } catch PrescriptionDocumentStorageError.cleanupPending {
-      reject(
-        "prescription_documents_cleanup_pending",
-        "Prescription document cleanup must complete before another import.",
-        nil
-      )
-    } catch PrescriptionDocumentStorageError.candidateMissing {
-      reject(
-        "prescription_documents_candidate_missing",
-        "The temporary prescription document is no longer available.",
-        nil
-      )
+  private func decode<T: Decodable>(_ value: NSDictionary, as type: T.Type) throws -> T {
+    try JSONDecoder().decode(type, from: JSONSerialization.data(withJSONObject: value))
+  }
+
+  private func perform(_ resolve: RCTPromiseResolveBlock, _ reject: RCTPromiseRejectBlock,
+                       operation: () throws -> Any?) {
+    do { resolve(try operation()) }
+    catch PrescriptionDocumentStorageError.cleanupPending {
+      reject("prescription_documents_cleanup_pending", "Prescription cleanup must finish first.", nil)
+    } catch PrescriptionDocumentStorageError.migrationRequired {
+      reject("prescription_documents_migration_required", "Complete the saved prescription details first.", nil)
+    } catch PrescriptionDocumentStorageError.staleRecord {
+      reject("prescription_documents_stale_record", "This prescription has changed. Reload and try again.", nil)
+    } catch PrescriptionDocumentStorageError.commitUncertain {
+      reject("prescription_documents_commit_uncertain", "The prescription change needs to be checked. Reload the wallet.", nil)
     } catch {
-      reject(
-        "prescription_documents_commit_failed",
-        "Unable to save the prescription document.",
-        nil
-      )
+      reject("prescription_documents_operation_failed", "The prescription operation could not be completed.", nil)
     }
   }
 
   @objc(read:rejecter:)
-  func read(
-    _ resolve: RCTPromiseResolveBlock,
-    rejecter reject: RCTPromiseRejectBlock
-  ) {
-    do {
+  func read(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) {
       let state = try storage.readState()
+      return [
+        "records": try state.records.map { try $0.bridgePayload() },
+        "pendingCleanup": state.pendingCleanup,
+        "legacyDocumentId": state.legacyDocumentId.map { $0 as Any } ?? NSNull(),
+      ] as [String: Any]
+    }
+  }
 
-      let payload: [String: Any] = [
-        "current": state.current.map { $0 as Any } ?? NSNull(),
-        "pendingCleanup": state.pendingCleanup.map { $0 as Any } ?? NSNull(),
-      ]
+  @objc(create:metadata:resolver:rejecter:)
+  func create(_ candidate: String, metadata: NSDictionary,
+              resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) {
+      try storage.create(candidate, metadata: decode(metadata, as: PrescriptionMetadata.self)).bridgePayload()
+    }
+  }
 
-      resolve(payload)
-    } catch {
-      reject(
-        "prescription_documents_read_failed",
-        "Unable to read prescription document state.",
-        nil
-      )
+  @objc(replace:expected:resolver:rejecter:)
+  func replace(_ candidate: String, expected: NSDictionary,
+               resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) {
+      try storage.replace(candidate, expected: decode(expected, as: PrescriptionRecord.self)).bridgePayload()
+    }
+  }
+
+  @objc(updateMetadata:metadata:resolver:rejecter:)
+  func updateMetadata(_ expected: NSDictionary, metadata: NSDictionary,
+                      resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) {
+      try storage.updateMetadata(decode(expected, as: PrescriptionRecord.self),
+                                 metadata: decode(metadata, as: PrescriptionMetadata.self)).bridgePayload()
+    }
+  }
+
+  @objc(remove:resolver:rejecter:)
+  func remove(_ expected: NSDictionary, resolver resolve: RCTPromiseResolveBlock,
+              rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) {
+      try storage.remove(decode(expected, as: PrescriptionRecord.self))
+      return nil
+    }
+  }
+
+  @objc(migrateLegacy:metadata:resolver:rejecter:)
+  func migrateLegacy(_ document: String, metadata: NSDictionary,
+                     resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) {
+      try storage.migrateLegacy(document, metadata: decode(metadata, as: PrescriptionMetadata.self)).bridgePayload()
     }
   }
 
   @objc(cleanup:rejecter:)
-  func cleanup(
-    _ resolve: RCTPromiseResolveBlock,
-    rejecter reject: RCTPromiseRejectBlock
-  ) {
-    do {
-      let state = try storage.readState()
-
-      guard let pendingCleanup = state.pendingCleanup else {
-        resolve(nil)
-        return
-      }
-
-      try storage.removeDocumentContainer(for: pendingCleanup)
-
-      let cleanedState = PrescriptionDocumentState(
-        current: state.current,
-        pendingCleanup: nil
-      )
-
-      try storage.writeState(cleanedState)
-
-      resolve(nil)
-    } catch {
-      reject(
-        "prescription_documents_cleanup_failed",
-        "Unable to clean up the superseded prescription document.",
-        nil
-      )
-    }
+  func cleanup(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) { try storage.cleanup(); return nil }
   }
 
   @objc(release:resolver:rejecter:)
-  func release(
-    _ candidate: String,
-    resolver resolve: RCTPromiseResolveBlock,
-    rejecter reject: RCTPromiseRejectBlock
-  ) {
-    do {
-      try storage.removeCandidateContainer(for: candidate)
-      resolve(nil)
-    } catch {
-      reject(
-        "prescription_documents_release_failed",
-        "Unable to release the temporary prescription document.",
-        nil
-      )
-    }
+  func release(_ candidate: String, resolver resolve: RCTPromiseResolveBlock,
+               rejecter reject: RCTPromiseRejectBlock) {
+    perform(resolve, reject) { try storage.release(candidate); return nil }
   }
   private enum PrescriptionAuthenticationResult {
     case authenticated
@@ -252,13 +221,7 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
       }
 
       do {
-        let state = try self.storage.readState()
-
-        guard state.current == current else {
-          throw PrescriptionDocumentStorageError.documentMissing
-        }
-
-        let documentURL = try self.storage.documentURL(for: current)
+        _ = try self.storage.retainedDocumentURL(for: current)
 
         self.authenticateForPrescription { authenticationResult in
           switch authenticationResult {
@@ -291,7 +254,14 @@ final class PrescriptionDocuments: NSObject, UIDocumentPickerDelegate, QLPreview
                 return
               }
 
-              self.previewURL = documentURL
+              // Authentication may outlive a replacement/deletion. Recheck membership
+              // before presenting; the same gate also protects the pending legacy item.
+              do {
+                self.previewURL = try self.storage.retainedDocumentURL(for: current)
+              } catch {
+                reject("prescription_documents_open_failed", "Unable to open the prescription document.", nil)
+                return
+              }
 
               let previewController = QLPreviewController()
               previewController.dataSource = self

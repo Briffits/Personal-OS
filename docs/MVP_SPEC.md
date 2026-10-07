@@ -102,6 +102,7 @@ Prescription Wallet is a standalone collection of retained documents, separate f
 
 Each prescription has a stable `PrescriptionRecordId`, a separate opaque document ID and metadata:
 
+- `displayName`: a user-defined label, required by the entry/edit form; optional in persisted v2 records for compatibility, with “Unnamed prescription” shown when absent;
 - `kind`: `standard` or `temporary`;
 - `medicationIds`: a readonly array of unique, non-blank medication IDs;
 - `expiresOn`: required;
@@ -116,4 +117,4 @@ Documents remain app-private. JavaScript receives opaque identifiers, never file
 
 Metadata is independently editable through `updatePrescription(recordId, metadata)`. Validate before mutation and preserve both IDs. The durable `updateMetadata(expectedRecord, metadata)` transaction compares the complete existing record and rejects stale snapshots, unknown records and pending cleanup without mutation. Metadata-only updates perform no document, candidate or cleanup operations.
 
-This iteration implements the platform-independent TypeScript model, collection service and tests. The existing native store and screen remain legacy single-document implementations pending the [native and UI migration](PRESCRIPTION_WALLET.md). No collection persistence is fabricated in JavaScript.
+The collection service now connects to native versioned collection storage and the Prescriptions UI. Legacy documents remain available through authenticated viewing until the user supplies required metadata; migration reuses their existing stored documents and commits collection state atomically. See [storage, migration and validation status](PRESCRIPTION_WALLET.md). Mac/Xcode and physical-iPhone validation remain required; no collection persistence is fabricated in JavaScript.

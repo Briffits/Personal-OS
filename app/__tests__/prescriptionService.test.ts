@@ -75,9 +75,7 @@ test('metadata update preserves both IDs, other records and documents, and remov
     other,
   ]);
   expect(updated.medicationIds).toEqual(['a', 'b']);
-  expect(fixture.copies).toEqual(
-    new Set([old.documentId, other.documentId]),
-  );
+  expect(fixture.copies).toEqual(new Set([old.documentId, other.documentId]));
   expectNoDocumentMutation(fixture);
 });
 
@@ -695,4 +693,16 @@ test('read failures propagate without selection and release the operation lock',
     records: [old],
     pendingCleanup: [],
   });
+});
+
+test('uncertain commit returns verification-required, releases candidate and does not clean up', async () => {
+  const fixture = setup();
+  fixture.store.replace.mockRejectedValueOnce({
+    code: 'prescription_documents_commit_uncertain',
+  });
+  expect(await fixture.service.replaceDocument(id)).toEqual({
+    status: 'verification-required',
+  });
+  expect(fixture.documents.release).toHaveBeenCalledWith(candidate);
+  expect(fixture.store.cleanup).not.toHaveBeenCalled();
 });
