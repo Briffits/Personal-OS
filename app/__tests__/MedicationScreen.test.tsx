@@ -3,6 +3,10 @@ import { ActionSheetIOS, Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import MedicationScreen from '../src/screens/MedicationScreen';
 import {
+  loadMedicationName,
+  saveMedicationName,
+} from '../src/storage/medicationNameStorage';
+import {
   loadMedicationStock,
   saveMedicationStock,
 } from '../src/storage/medicationStockStorage';
@@ -16,6 +20,13 @@ jest.mock('../src/storage/medicationStockStorage', () => ({
   saveMedicationStock: jest.fn(),
 }));
 const loadStock = jest.mocked(loadMedicationStock);
+jest.mock('../src/storage/medicationNameStorage', () => ({
+  DEFAULT_MEDICATION_NAME: 'Medication A',
+  loadMedicationName: jest.fn(),
+  saveMedicationName: jest.fn(),
+}));
+const loadName = jest.mocked(loadMedicationName);
+const saveName = jest.mocked(saveMedicationName);
 const saveStock = jest.mocked(saveMedicationStock);
 let screen: ReactTestRenderer.ReactTestRenderer;
 let prompt: jest.SpyInstance;
@@ -24,6 +35,8 @@ let sheet: jest.SpyInstance;
 const back = jest.fn();
 
 beforeEach(() => {
+  loadName.mockReset().mockResolvedValue('Medication A');
+  saveName.mockReset().mockResolvedValue(undefined);
   loadStock.mockReset().mockResolvedValue(12);
   saveStock.mockReset().mockResolvedValue(undefined);
   back.mockReset();
@@ -57,12 +70,17 @@ function absent(label: string) {
   ).toHaveLength(0);
 }
 async function openPrompt(action: string) {
-  if (action === 'Correct stock') {
-    await act(async () => button('More stock actions').props.onPress());
-    await act(async () => sheet.mock.calls[sheet.mock.calls.length - 1][1](0));
-  } else {
-    await act(async () => button(action).props.onPress());
-  }
+  const names: Record<string, string> = {
+    'Correct stock': 'correct',
+    'Add stock': 'add',
+    'Record current stock': 'record',
+    'Edit medication name': 'rename',
+  };
+  await act(async () =>
+    summary().props.onAccessibilityAction({
+      nativeEvent: { actionName: names[action] },
+    }),
+  );
 }
 function promptButtons() {
   return prompt.mock.calls[prompt.mock.calls.length - 1][2];
@@ -83,7 +101,10 @@ test.each(['0', '7'])(
     expect(saveStock).toHaveBeenCalledWith(Number(value));
     expect(rendered()).toContain('Recorded stock: ' + value + ' tablets');
     absent('Record current stock');
-    expect(button('Add stock')).toBeDefined();
+    expect(summary().props.accessibilityActions).toContainEqual({
+      name: 'add',
+      label: 'Add stock',
+    });
   },
 );
 test('zero is recorded and successive additions use the updated total', async () => {
@@ -206,8 +227,13 @@ test('card tap is not add; long press and VoiceOver offer correction', async () 
     label: 'Correct stock',
   });
   await act(async () => summary().props.onLongPress());
-  expect(sheet.mock.calls[0][0].options).toEqual(['Correct stock', 'Cancel']);
-  await act(async () => sheet.mock.calls[0][1](1));
+  expect(sheet.mock.calls[0][0].options).toEqual([
+    'Add stock',
+    'Correct stock',
+    'Edit medication name',
+    'Cancel',
+  ]);
+  await act(async () => sheet.mock.calls[0][1](3));
   expect(prompt).not.toHaveBeenCalled();
   await act(async () =>
     summary().props.onAccessibilityAction({
@@ -236,12 +262,9 @@ test('prevents duplicate prompts, double submission and overlapping saves', asyn
     submitOnce('3');
   });
   expect(saveStock).toHaveBeenCalledTimes(1);
-  expect(button('Add stock').props.disabled).toBe(true);
-  expect(button('More stock actions').props.disabled).toBe(true);
+  expect(summary().props.accessibilityActions).toEqual([]);
   expect(button('Back to Library').props.disabled).toBe(true);
   await act(async () => {
-    button('Add stock').props.onPress();
-    button('More stock actions').props.onPress();
     summary().props.onLongPress();
     summary().props.onAccessibilityAction({
       nativeEvent: { actionName: 'correct' },
@@ -269,7 +292,10 @@ test('failed save preserves count and allows a fresh attempt', async () => {
     'Unable to save stock',
     'Your stock amount could not be saved. Please try again.',
   );
-  expect(button('Add stock').props.disabled).toBe(false);
+  expect(summary().props.accessibilityActions).toContainEqual({
+    name: 'add',
+    label: 'Add stock',
+  });
   await submit('Add stock', '3');
   expect(saveStock).toHaveBeenLastCalledWith(15);
 });
@@ -343,4 +369,176 @@ test('a prompt callback after leaving Medication cannot save', async () => {
   await act(async () => screen.unmount());
   await act(async () => confirm('3'));
   expect(saveStock).not.toHaveBeenCalled();
+});
+
+test.each([null, 0, 12])(
+  'rename preserves stock %p and uses the saved name',
+  async count => {
+    loadStock.mockResolvedValue(count);
+    loadName.mockResolvedValue('Example medication');
+    await renderScreen();
+    expect(summary().props.accessibilityLabel).toContain('Example medication');
+    await openPrompt('Edit medication name');
+    expect(prompt.mock.calls[0][4]).toBe('Example medication');
+    await act(async () => promptButtons()[1].onPress('  Renamed example  '));
+    expect(saveName).toHaveBeenCalledWith('Renamed example');
+    expect(saveStock).not.toHaveBeenCalled();
+    expect(summary().props.accessibilityLabel).toContain('Renamed example');
+    expect(rendered()).toContain(
+      count === null
+        ? 'Stock not recorded'
+        : `Recorded stock: ${count} tablets`,
+    );
+    await submit(count === null ? 'Record current stock' : 'Add stock', '3');
+    expect(saveStock).toHaveBeenCalledWith(count === null ? 3 : count + 3);
+    expect(summary().props.accessibilityLabel).toContain('Renamed example');
+  },
+);
+
+test.each(['', '   ', undefined])(
+  'invalid name %p cannot save',
+  async value => {
+    await renderScreen();
+    await submit('Edit medication name', value);
+    expect(saveName).not.toHaveBeenCalled();
+    expect(saveStock).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Invalid name', expect.any(String));
+  },
+);
+
+test('name read failure blocks every mutation until Retry succeeds', async () => {
+  loadName.mockRejectedValueOnce(new Error('Unavailable'));
+  await renderScreen();
+  expect(summary().props.accessibilityActions).toEqual([]);
+  await openPrompt('Edit medication name');
+  await openPrompt('Add stock');
+  await act(async () => summary().props.onLongPress());
+  expect(prompt).not.toHaveBeenCalled();
+  expect(sheet).not.toHaveBeenCalled();
+  await act(async () => button('Retry stock loading').props.onPress());
+  await submit('Edit medication name', 'Example');
+  expect(saveName).toHaveBeenCalledWith('Example');
+});
+
+test('failed rename preserves name and stock and can be retried', async () => {
+  saveName.mockRejectedValueOnce(new Error('Unavailable'));
+  await renderScreen();
+  await submit('Edit medication name', 'Example');
+  expect(summary().props.accessibilityLabel).toBe(
+    'Medication A, Recorded stock: 12 tablets',
+  );
+  expect(alert).toHaveBeenCalledWith('Unable to save name', expect.any(String));
+  await submit('Edit medication name', 'Example');
+  expect(summary().props.accessibilityLabel).toBe(
+    'Example, Recorded stock: 12 tablets',
+  );
+});
+
+test('rename save blocks stock, rename and Back, including duplicate callbacks', async () => {
+  let resolve!: () => void;
+  saveName.mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    }),
+  );
+  await renderScreen();
+  await openPrompt('Edit medication name');
+  const confirm = promptButtons()[1].onPress;
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = confirm('Example');
+    confirm('Other');
+  });
+  await openPrompt('Add stock');
+  await openPrompt('Edit medication name');
+  await act(async () => {
+    summary().props.onLongPress();
+    button('Back to Library').props.onPress();
+  });
+  expect(summary().props.accessibilityActions).toEqual([]);
+  expect(saveName).toHaveBeenCalledTimes(1);
+  expect(saveStock).not.toHaveBeenCalled();
+  expect(back).not.toHaveBeenCalled();
+  expect(sheet).not.toHaveBeenCalled();
+  await act(async () => {
+    resolve();
+    await pending;
+  });
+  await act(async () => confirm('Other'));
+  expect(saveName).toHaveBeenCalledTimes(1);
+  await submit('Add stock', '3');
+  expect(saveStock).toHaveBeenCalledWith(15);
+});
+
+test.each([null, 12])(
+  'long press and accessibility offer equivalent actions for stock %p',
+  async count => {
+    loadStock.mockResolvedValue(count);
+    await renderScreen();
+    for (const label of [
+      'Add stock',
+      'Record current stock',
+      'More stock actions',
+      'Edit medication name',
+    ]) {
+      absent(label);
+    }
+    expect(rendered()).not.toMatch(/days (left|remaining)/i);
+    const actions = summary().props.accessibilityActions;
+    for (let index = 0; index < actions.length; index++) {
+      await act(async () => {
+        summary().props.onLongPress();
+        summary().props.onLongPress();
+      });
+      expect(sheet).toHaveBeenCalledTimes(index + 1);
+      const [options, select] = sheet.mock.calls[index];
+      expect(options.options).toEqual([
+        ...actions.map((action: { label: string }) => action.label),
+        'Cancel',
+      ]);
+      await act(async () => {
+        select(index);
+        select(index);
+      });
+      expect(prompt).toHaveBeenCalledTimes(index + 1);
+      expect(prompt.mock.calls[index][0]).toBe(actions[index].label);
+      await act(async () => promptButtons()[0].onPress());
+    }
+  },
+);
+
+test('cancelled and unmounted rename callbacks cannot write', async () => {
+  await renderScreen();
+  await openPrompt('Edit medication name');
+  const old = promptButtons();
+  await act(async () => {
+    old[0].onPress();
+    old[1].onPress('Example');
+  });
+  await openPrompt('Edit medication name');
+  const confirm = promptButtons()[1].onPress;
+  await act(async () => screen.unmount());
+  await act(async () => confirm('Example'));
+  expect(saveName).not.toHaveBeenCalled();
+});
+
+test('a rejected read waits for the other read before allowing Retry', async () => {
+  let resolve!: (name: string) => void;
+  loadStock.mockRejectedValueOnce(new Error('Unavailable'));
+  loadName.mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    }),
+  );
+  await renderScreen();
+  expect(rendered()).toContain('Loading stock');
+  absent('Retry stock loading');
+  await openPrompt('Edit medication name');
+  expect(prompt).not.toHaveBeenCalled();
+  await act(async () => resolve('Example'));
+  expect(rendered()).toContain('Unable to load stock');
+  await act(async () => button('Retry stock loading').props.onPress());
+  expect(loadStock).toHaveBeenCalledTimes(2);
+  expect(loadName).toHaveBeenCalledTimes(2);
+  expect(rendered()).toContain('Recorded stock: 12 tablets');
 });

@@ -3,6 +3,10 @@ import { Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import App from '../App';
 import {
+  loadMedicationName,
+  saveMedicationName,
+} from '../src/storage/medicationNameStorage';
+import {
   loadMedicationStock,
   saveMedicationStock,
 } from '../src/storage/medicationStockStorage';
@@ -15,6 +19,11 @@ jest.mock(
 jest.mock('../src/storage/medicationStockStorage', () => ({
   loadMedicationStock: jest.fn(),
   saveMedicationStock: jest.fn(),
+}));
+jest.mock('../src/storage/medicationNameStorage', () => ({
+  DEFAULT_MEDICATION_NAME: 'Medication A',
+  loadMedicationName: jest.fn(),
+  saveMedicationName: jest.fn(),
 }));
 jest.mock('../src/native/NativePrescriptionDocuments', () => ({
   NativePrescriptionDocuments: {
@@ -41,6 +50,8 @@ beforeEach(async () => {
     .mocked(NativePrescriptionDocuments.read)
     .mockResolvedValue({ records: [], pendingCleanup: [] });
   loadStock.mockReset().mockResolvedValue(12);
+  jest.mocked(loadMedicationName).mockReset().mockResolvedValue('Medication A');
+  jest.mocked(saveMedicationName).mockReset().mockResolvedValue(undefined);
   saveStock.mockReset().mockResolvedValue(undefined);
   await act(async () => {
     screen = ReactTestRenderer.create(<App />);
@@ -92,10 +103,12 @@ test.each(['Medication', 'Prescriptions'])(
     expectAbsent('Library tab');
     if (destination === 'Medication') {
       for (const label of ['Add stock', 'More stock actions']) {
-        expect(
-          screen.root.findByProps({ accessibilityLabel: label }),
-        ).toBeDefined();
+        expectAbsent(label);
       }
+      expect(
+        screen.root.findByProps({ testID: 'medication-summary' }).props
+          .accessibilityActions,
+      ).toContainEqual({ name: 'add', label: 'Add stock' });
       expectAbsent('View Prescription');
       expectAbsent('Replace Prescription');
       expect(loadStock).toHaveBeenCalledTimes(1);
@@ -138,7 +151,11 @@ test('saved stock reloads after visiting Prescriptions and returning to Medicati
   const prompt = jest.spyOn(Alert, 'prompt').mockImplementation(() => {});
   await press('Library tab');
   await press('Open Medication');
-  await press('Add stock');
+  await act(async () =>
+    screen.root
+      .findByProps({ testID: 'medication-summary' })
+      .props.onAccessibilityAction({ nativeEvent: { actionName: 'add' } }),
+  );
   const buttons = prompt.mock.calls[0][2] as {
     onPress?: (value: string) => void;
   }[];
@@ -153,4 +170,31 @@ test('saved stock reloads after visiting Prescriptions and returning to Medicati
   expect(JSON.stringify(screen.toJSON())).toContain(
     'Recorded stock: 15 tablets',
   );
+});
+
+test('renamed medication reloads after leaving and preserves recorded stock', async () => {
+  let persistedName = 'Medication A';
+  jest.mocked(loadMedicationName).mockImplementation(async () => persistedName);
+  jest.mocked(saveMedicationName).mockImplementation(async name => {
+    persistedName = name;
+  });
+  const prompt = jest.spyOn(Alert, 'prompt').mockImplementation(() => {});
+  await press('Library tab');
+  await press('Open Medication');
+  await act(async () =>
+    screen.root
+      .findByProps({ testID: 'medication-summary' })
+      .props.onAccessibilityAction({ nativeEvent: { actionName: 'rename' } }),
+  );
+  const buttons = prompt.mock.calls[0][2] as {
+    onPress?: (value: string) => void;
+  }[];
+  await act(async () => buttons[1].onPress!('Example medication'));
+  await press('Back to Library');
+  await press('Open Medication');
+  expect(
+    screen.root.findByProps({ testID: 'medication-summary' }).props
+      .accessibilityLabel,
+  ).toBe('Example medication, Recorded stock: 12 tablets');
+  expect(saveStock).not.toHaveBeenCalled();
 });

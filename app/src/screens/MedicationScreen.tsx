@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Text,
   useWindowDimensions,
-  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppCard from '../design-system/components/AppCard';
@@ -23,11 +22,17 @@ import {
   saveMedicationStock,
 } from '../storage/medicationStockStorage';
 
+import {
+  DEFAULT_MEDICATION_NAME,
+  loadMedicationName,
+  saveMedicationName,
+} from '../storage/medicationNameStorage';
+
 type StockState =
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'ready'; count: number | null };
-type StockAction = 'record' | 'add' | 'correct';
+  | { status: 'ready'; count: number | null; name: string };
+type MedicationAction = 'record' | 'add' | 'correct' | 'rename';
 
 function MedicationScreen({ onBack }: { onBack: () => void }) {
   const theme = usePersonalOSTheme();
@@ -51,9 +56,23 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
     busy.current = true;
     updateState({ status: 'loading' });
     try {
-      const count = await loadMedicationStock();
+      // Settle both reads before releasing the retry/mutation guard.
+      const [stockResult, nameResult] = await Promise.allSettled([
+        loadMedicationStock(),
+        loadMedicationName(),
+      ]);
+      if (
+        stockResult.status === 'rejected' ||
+        nameResult.status === 'rejected'
+      ) {
+        throw new Error('Unable to load medication.');
+      }
       if (mounted.current) {
-        updateState({ status: 'ready', count });
+        updateState({
+          status: 'ready',
+          count: stockResult.value,
+          name: nameResult.value,
+        });
       }
     } catch {
       if (mounted.current) {
@@ -72,14 +91,14 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
     };
   }, [loadStock]);
 
-  function requestStock(action: StockAction) {
+  function requestAction(action: MedicationAction) {
     const state = currentStock.current;
     if (
       !mounted.current ||
       busy.current ||
       promptOpen.current ||
       state.status !== 'ready' ||
-      (action !== 'record' && state.count === null) ||
+      ((action === 'add' || action === 'correct') && state.count === null) ||
       (action === 'record' && state.count !== null)
     ) {
       return;
@@ -88,14 +107,18 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
     // Native callbacks can outlive their presentation; each prompt may submit only once.
     let consumed = false;
     const title =
-      action === 'add'
+      action === 'rename'
+        ? 'Edit medication name'
+        : action === 'add'
         ? 'Add stock'
         : action === 'record'
         ? 'Record current stock'
         : 'Correct stock';
     Alert.prompt(
       title,
-      action === 'add'
+      action === 'rename'
+        ? 'Enter a name for this medication.'
+        : action === 'add'
         ? 'Enter the number of tablets to add.'
         : action === 'record'
         ? 'Enter the current number of tablets you physically have.'
@@ -105,13 +128,17 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
           text: 'Cancel',
           style: 'cancel',
           onPress: () => {
-            consumed = true;
-            promptOpen.current = false;
+            if (!consumed) {
+              consumed = true;
+              promptOpen.current = false;
+            }
           },
         },
         {
           text:
-            action === 'add'
+            action === 'rename'
+              ? 'Save'
+              : action === 'add'
               ? 'Add'
               : action === 'record'
               ? 'Record'
@@ -134,14 +161,18 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
             const total =
               action === 'add' ? (state.count as number) + amount : amount;
             if (
-              !/^\d+$/.test(input) ||
-              !Number.isSafeInteger(amount) ||
-              amount < (action === 'add' ? 1 : 0) ||
-              !Number.isSafeInteger(total)
+              action === 'rename'
+                ? !input
+                : !/^\d+$/.test(input) ||
+                  !Number.isSafeInteger(amount) ||
+                  amount < (action === 'add' ? 1 : 0) ||
+                  !Number.isSafeInteger(total)
             ) {
               Alert.alert(
-                'Invalid amount',
-                action === 'add'
+                action === 'rename' ? 'Invalid name' : 'Invalid amount',
+                action === 'rename'
+                  ? 'Enter a medication name.'
+                  : action === 'add'
                   ? 'Enter a whole number greater than zero within the supported range.'
                   : 'Enter a whole number of zero or more within the supported range.',
               );
@@ -151,15 +182,26 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
             busy.current = true;
             setSaving(true);
             try {
-              await saveMedicationStock(total);
+              if (action === 'rename') {
+                await saveMedicationName(input);
+              } else {
+                await saveMedicationStock(total);
+              }
               if (mounted.current) {
-                updateState({ status: 'ready', count: total });
+                updateState({
+                  ...state,
+                  ...(action === 'rename' ? { name: input } : { count: total }),
+                });
               }
             } catch {
               if (mounted.current) {
                 Alert.alert(
-                  'Unable to save stock',
-                  'Your stock amount could not be saved. Please try again.',
+                  action === 'rename'
+                    ? 'Unable to save name'
+                    : 'Unable to save stock',
+                  action === 'rename'
+                    ? 'Your medication name could not be saved. Please try again.'
+                    : 'Your stock amount could not be saved. Please try again.',
                 );
               }
             } finally {
@@ -172,37 +214,57 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
         },
       ],
       'plain-text',
-      '',
-      'number-pad',
+      action === 'rename' ? state.name : '',
+      action === 'rename' ? 'default' : 'number-pad',
     );
   }
+
+  const recorded = stock.status === 'ready' && stock.count !== null;
+  const disabled = stock.status !== 'ready' || saving;
+  const name = stock.status === 'ready' ? stock.name : DEFAULT_MEDICATION_NAME;
+  const actions: { name: MedicationAction; label: string }[] = disabled
+    ? []
+    : [
+        ...(recorded
+          ? [
+              { name: 'add' as const, label: 'Add stock' },
+              { name: 'correct' as const, label: 'Correct stock' },
+            ]
+          : [{ name: 'record' as const, label: 'Record current stock' }]),
+        { name: 'rename', label: 'Edit medication name' },
+      ];
 
   function showActions() {
     if (
       !mounted.current ||
       busy.current ||
       promptOpen.current ||
-      currentStock.current.status !== 'ready' ||
-      currentStock.current.count === null
+      currentStock.current.status !== 'ready'
     ) {
       return;
     }
+    promptOpen.current = true;
+    let consumed = false;
     ActionSheetIOS.showActionSheetWithOptions(
       {
-        title: 'Medication A',
-        options: ['Correct stock', 'Cancel'],
-        cancelButtonIndex: 1,
+        title: currentStock.current.name,
+        options: [...actions.map(action => action.label), 'Cancel'],
+        cancelButtonIndex: actions.length,
       },
       index => {
-        if (index === 0) {
-          requestStock('correct');
+        if (consumed) {
+          return;
+        }
+        consumed = true;
+        promptOpen.current = false;
+        const action = actions[index];
+        if (action) {
+          requestAction(action.name);
         }
       },
     );
   }
 
-  const recorded = stock.status === 'ready' && stock.count !== null;
-  const disabled = stock.status !== 'ready' || saving;
   const stockDescription =
     stock.status === 'loading'
       ? 'Loading stock…'
@@ -248,23 +310,23 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
           <Pressable
             testID="medication-summary"
             accessible
-            accessibilityLabel={`Medication A, ${stockDescription}`}
+            accessibilityLabel={`${name}, ${stockDescription}`}
+            accessibilityHint="Touch and hold for medication actions, or use accessibility actions."
             accessibilityRole={stock.status === 'error' ? 'alert' : undefined}
             accessibilityState={{ busy: saving || stock.status === 'loading' }}
             style={styles.summary}
-            accessibilityActions={
-              recorded && !disabled
-                ? [{ name: 'correct', label: 'Correct stock' }]
-                : []
-            }
+            accessibilityActions={actions}
             onAccessibilityAction={event => {
-              if (event.nativeEvent.actionName === 'correct') {
-                requestStock('correct');
+              const action = actions.find(
+                item => item.name === event.nativeEvent.actionName,
+              );
+              if (action) {
+                requestAction(action.name);
               }
             }}
             onLongPress={showActions}
           >
-            <Text style={[typography.cardTitle, textColour]}>Medication A</Text>
+            <Text style={[typography.cardTitle, textColour]}>{name}</Text>
             <Text style={[typography.bodyStrong, styles.stock, textColour]}>
               {stockDescription}
             </Text>
@@ -272,7 +334,8 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
           {stock.status === 'error' && (
             <>
               <Text style={[typography.body, textColour]}>
-                Your saved stock could not be read. Retry before making changes.
+                Your saved medication details could not be read. Retry before
+                making changes.
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -284,44 +347,12 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
               </Pressable>
             </>
           )}
-          {stock.status === 'ready' && (
-            <View style={styles.actions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  recorded ? 'Add stock' : 'Record current stock'
-                }
-                accessibilityState={{ disabled, busy: saving }}
-                disabled={disabled}
-                onPress={() => requestStock(recorded ? 'add' : 'record')}
-                style={styles.action}
-              >
-                <Text style={[typography.bodyStrong, actionColour]}>
-                  {recorded ? 'Add stock' : 'Record current stock'}
-                </Text>
-              </Pressable>
-              {recorded && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="More stock actions"
-                  accessibilityState={{ disabled }}
-                  disabled={disabled}
-                  onPress={showActions}
-                  style={styles.action}
-                >
-                  <Text style={[typography.bodyStrong, actionColour]}>
-                    More…
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          )}
           {saving && (
             <Text
               accessibilityRole="alert"
               style={[typography.body, textColour]}
             >
-              Saving stock…
+              Saving medication…
             </Text>
           )}
         </AppCard>
@@ -332,7 +363,8 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
             { color: theme.colours.textSecondary },
           ]}
         >
-          Stock is saved on this device and updated manually.
+          Touch and hold the card for actions. Stock is saved on this device and
+          updated manually.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -345,12 +377,6 @@ const styles = StyleSheet.create({
   title: { marginTop: spacing.sm, marginBottom: spacing.lg },
   stock: { marginTop: spacing.sm },
   summary: { minHeight: layout.minimumTouchTarget },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: spacing.lg,
-    marginTop: spacing.sm,
-  },
   action: {
     minHeight: layout.minimumTouchTarget,
     minWidth: layout.minimumTouchTarget,
