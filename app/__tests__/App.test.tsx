@@ -91,7 +91,7 @@ test.each(['Medication', 'Prescriptions'])(
     ).toBe(true);
     expectAbsent('Library tab');
     if (destination === 'Medication') {
-      for (const label of ['Add Stock', 'Correct Stock']) {
+      for (const label of ['Add stock', 'More stock actions']) {
         expect(
           screen.root.findByProps({ accessibilityLabel: label }),
         ).toBeDefined();
@@ -103,8 +103,8 @@ test.each(['Medication', 'Prescriptions'])(
       expect(
         screen.root.findByProps({ accessibilityLabel: 'Add prescription' }),
       ).toBeDefined();
-      expectAbsent('Add Stock');
-      expectAbsent('Correct Stock');
+      expectAbsent('Add stock');
+      expectAbsent('More stock actions');
       expect(loadStock).not.toHaveBeenCalled();
     }
     for (const [name, method] of Object.entries(NativePrescriptionDocuments)) {
@@ -138,7 +138,7 @@ test('saved stock reloads after visiting Prescriptions and returning to Medicati
   const prompt = jest.spyOn(Alert, 'prompt').mockImplementation(() => {});
   await press('Library tab');
   await press('Open Medication');
-  await press('Add Stock');
+  await press('Add stock');
   const buttons = prompt.mock.calls[0][2] as {
     onPress?: (value: string) => void;
   }[];
@@ -146,11 +146,11 @@ test('saved stock reloads after visiting Prescriptions and returning to Medicati
   expect(saveStock).toHaveBeenCalledWith(15);
   await press('Back to Library');
   await press('Open Prescriptions');
-  expect(JSON.stringify(screen.toJSON())).not.toContain('Estimated stock');
+  expect(JSON.stringify(screen.toJSON())).not.toContain('Recorded stock');
   await press('Back to Library');
   await press('Open Medication');
   expect(loadStock).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(screen.toJSON())).toContain(
-    'Estimated stock: 15 tablets',
+    'Recorded stock: 15 tablets',
   );
 });
