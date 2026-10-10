@@ -240,12 +240,18 @@ export function createPrescriptionService({
       exclusive(async () => {
         await documents.open(find(await store.read(), id).documentId);
       }),
-    deletePrescription: (id: PrescriptionRecordId) =>
+    deletePrescription: (
+      id: PrescriptionRecordId,
+      beforeRemove?: (record: PrescriptionRecord) => Promise<void>,
+    ) =>
       exclusive(async () => {
         const record = find(await writableState(), id);
         if (!(await confirmDeletion(record))) {
           return { status: 'cancelled' } as const;
         }
+        // Composition may prepare another domain after confirmation and before
+        // removal. Prescription storage itself never reads or owns that domain.
+        await beforeRemove?.(record);
         await store.remove(record);
         return {
           status: (await cleanup()) ? 'deleted' : 'cleanup-pending',

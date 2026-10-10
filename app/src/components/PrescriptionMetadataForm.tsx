@@ -48,7 +48,7 @@ export default function PrescriptionMetadataForm({
       metadata = validatePrescriptionMetadata({
         displayName: displayName.trim(),
         kind,
-        // Preserve existing relationships on edits. Linking has no Medication UI yet.
+        // Preserve legacy compatibility data; MedicationRecord.prescriptionId owns links.
         medicationIds: initial?.medicationIds ?? [],
         expiresOn: expiresOn.trim(),
         ...(issuedOn.trim() ? { issuedOn: issuedOn.trim() } : {}),

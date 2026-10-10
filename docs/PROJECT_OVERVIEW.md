@@ -185,7 +185,7 @@ The Prescription Wallet is one of the original reasons for creating Personal OS 
 
 Apple Health will remain responsible for medication schedules, prompts and logging whether doses were taken.
 
-Prescription Wallet is a standalone document domain, separate from Medication and its stock tracking. Prescriptions and medications may each relate to zero, one or many of the other, using medication ID links rather than medication-owned prescriptions.
+Prescription Wallet is a standalone document domain, separate from Medication and its stock tracking. One prescription may relate to many medications; each medication may link to zero or one prescription using its canonical `prescriptionId`. Prescription `medicationIds` remains legacy compatibility data only. Neither domain owns the other's records.
 
 ### Planned functions
 

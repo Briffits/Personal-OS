@@ -98,13 +98,13 @@ Estimated time: 10 minutes
 
 ## Prescription Wallet
 
-Prescription Wallet is a standalone collection of retained documents, separate from Medication. A prescription may link to zero, one or many medication IDs; a medication may relate to zero, one or many prescriptions. Prescriptions do not own medication records and are never properties of medications. Medication stock tracking continues independently.
+Prescription Wallet is a standalone collection of retained documents, separate from Medication. One prescription may relate to many medications; a medication may link to zero or one prescription. `MedicationRecord.prescriptionId` is the only canonical relationship. Prescription `medicationIds` remains legacy compatibility data, preserved but not interpreted as links. Neither domain owns the other's records. Medication stock tracking continues independently.
 
 Each prescription has a stable `PrescriptionRecordId`, a separate opaque document ID and metadata:
 
 - `displayName`: a user-defined label, required by the entry/edit form; optional in persisted v2 records for compatibility, with “Unnamed prescription” shown when absent;
 - `kind`: `standard` or `temporary`;
-- `medicationIds`: a readonly array of unique, non-blank medication IDs;
+- `medicationIds`: a readonly array of unique, non-blank medication IDs retained for legacy compatibility only;
 - `expiresOn`: required;
 - `issuedOn`: optional;
 - `startsOn`: optional for temporary prescriptions only.
@@ -118,3 +118,9 @@ Documents remain app-private. JavaScript receives opaque identifiers, never file
 Metadata is independently editable through `updatePrescription(recordId, metadata)`. Validate before mutation and preserve both IDs. The durable `updateMetadata(expectedRecord, metadata)` transaction compares the complete existing record and rejects stale snapshots, unknown records and pending cleanup without mutation. Metadata-only updates perform no document, candidate or cleanup operations.
 
 The collection service now connects to native versioned collection storage and the Prescriptions UI. Legacy documents remain available through authenticated viewing until the user supplies required metadata; migration reuses their existing stored documents and commits collection state atomically. See [storage, migration and validation status](PRESCRIPTION_WALLET.md). Mac/Xcode and physical-iPhone validation remain required; no collection persistence is fabricated in JavaScript.
+
+## Medication collection
+
+Medication supports multiple independently identifiable records, a visible Add medication action, compact informational cards, and matching long-press/VoiceOver actions. Each record persists its stable ID, display name, stock (`null` means unrecorded) and optional canonical `prescriptionId`. Add/Edit allows at most one existing prescription or None / Unlinked. Normal tap never changes stock. Deleting medication requires confirmation and never deletes a prescription.
+
+Legacy singleton name/stock migrate without fabricated values or associations. Stock-only legacy data remains pending until the user supplies a name. Native Keychain storage uses serialized, revision-checked updates; legacy entries remain untouched. Confirmed prescription deletion must first unlink matching medications without deleting them or changing their stock; unlink failures stop deletion explicitly. See [Medication storage and migration](MEDICATION.md) for schema, failure handling and tests. No scheduling or dose ownership is introduced; Apple Health remains responsible for both.

@@ -452,7 +452,7 @@ Do not recreate a medication-adherence application.
 
 Do not provide diagnosis, treatment recommendations or medical interpretation.
 
-The wallet retains multiple standard or temporary prescriptions. Each prescription links to zero or more medication IDs, and each medication may relate to zero or more prescriptions. A prescription is never a property of a medication. Every prescription requires an expiry date; expiry is derived and never automatically deletes a record. There is no persisted inactive lifecycle state. Retained records are assumed current until the user deletes them.
+The wallet retains multiple standard or temporary prescriptions. One prescription may relate to many medications; each medication may link to zero or one prescription using the canonical `MedicationRecord.prescriptionId`. Prescription `medicationIds` is legacy compatibility data only and must not be used or maintained as a competing relationship. Prescription documents remain a separate domain. Every prescription requires an expiry date; expiry is derived and never automatically deletes a record. There is no persisted inactive lifecycle state. Retained records are assumed current until the user deletes them.
 
 Replacing or deleting a prescription requires explicit confirmation.
 

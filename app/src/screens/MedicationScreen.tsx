@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -17,238 +17,241 @@ import {
   typography,
   usePersonalOSTheme,
 } from '../design-system';
+import MedicationCard, {
+  medicationActions,
+  type MedicationAction,
+} from '../components/MedicationCard';
+import MedicationForm from '../components/MedicationForm';
 import {
-  loadMedicationStock,
-  saveMedicationStock,
-} from '../storage/medicationStockStorage';
+  type MedicationCollection,
+  type MedicationRecord,
+  type MedicationDetails,
+} from '../medications/medication';
+import { medicationService as service } from '../medications/currentMedicationService';
+type Editor =
+  | { mode: 'add' | 'migrate'; snapshot: MedicationCollection }
+  | { mode: 'edit'; record: MedicationRecord; snapshot: MedicationCollection };
 
-import {
-  DEFAULT_MEDICATION_NAME,
-  loadMedicationName,
-  saveMedicationName,
-} from '../storage/medicationNameStorage';
-
-type StockState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ready'; count: number | null; name: string };
-type MedicationAction = 'record' | 'add' | 'correct' | 'rename';
-
-function MedicationScreen({ onBack }: { onBack: () => void }) {
+export default function MedicationScreen({ onBack }: { onBack: () => void }) {
   const theme = usePersonalOSTheme();
   const { width } = useWindowDimensions();
-  const [stock, setStock] = useState<StockState>({ status: 'loading' });
-  const [saving, setSaving] = useState(false);
-  const currentStock = useRef(stock);
-  const busy = useRef(false);
-  const promptOpen = useRef(false);
+  const [state, setState] = useState<MedicationCollection | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const stateRef = useRef(state);
+  const busyRef = useRef(true);
+  const editorRef = useRef<Editor | null>(null);
+  const interaction = useRef(false);
   const mounted = useRef(false);
 
-  const updateState = useCallback((next: StockState) => {
-    currentStock.current = next;
-    setStock(next);
-  }, []);
-
-  const loadStock = useCallback(async () => {
-    if (!mounted.current || busy.current) {
-      return;
-    }
-    busy.current = true;
-    updateState({ status: 'loading' });
+  function update(next: MedicationCollection | null) {
+    stateRef.current = next;
+    setState(next);
+  }
+  function edit(next: Editor | null) {
+    editorRef.current = next;
+    setEditor(next);
+  }
+  async function reload() {
     try {
-      // Settle both reads before releasing the retry/mutation guard.
-      const [stockResult, nameResult] = await Promise.allSettled([
-        loadMedicationStock(),
-        loadMedicationName(),
-      ]);
-      if (
-        stockResult.status === 'rejected' ||
-        nameResult.status === 'rejected'
-      ) {
-        throw new Error('Unable to load medication.');
-      }
+      const next = await service.read();
       if (mounted.current) {
-        updateState({
-          status: 'ready',
-          count: stockResult.value,
-          name: nameResult.value,
-        });
+        update(next);
+        setFailed(false);
       }
     } catch {
       if (mounted.current) {
-        updateState({ status: 'error' });
+        update(null);
+        setFailed(true);
       }
-    } finally {
-      busy.current = false;
     }
-  }, [updateState]);
-
+  }
   useEffect(() => {
     mounted.current = true;
-    loadStock();
+    reload().finally(() => {
+      if (mounted.current) {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    });
     return () => {
       mounted.current = false;
     };
-  }, [loadStock]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  function requestAction(action: MedicationAction) {
-    const state = currentStock.current;
-    if (
-      !mounted.current ||
-      busy.current ||
-      promptOpen.current ||
-      state.status !== 'ready' ||
-      ((action === 'add' || action === 'correct') && state.count === null) ||
-      (action === 'record' && state.count !== null)
-    ) {
+  function available() {
+    return (
+      mounted.current &&
+      !busyRef.current &&
+      !interaction.current &&
+      editorRef.current === null &&
+      stateRef.current !== null
+    );
+  }
+  async function run(operation: () => Promise<MedicationCollection>) {
+    if (!mounted.current || busyRef.current) {
       return;
     }
-    promptOpen.current = true;
-    // Native callbacks can outlive their presentation; each prompt may submit only once.
+    busyRef.current = true;
+    setBusy(true);
+    setNotice('');
+    try {
+      const next = await operation();
+      if (mounted.current) {
+        update(next);
+        edit(null);
+        setNotice('Medication saved.');
+      }
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? error.code
+          : '';
+      if (mounted.current) {
+        if (code === 'invalid-input' || code === 'prescription-unavailable') {
+          Alert.alert(
+            code === 'invalid-input'
+              ? 'Invalid amount'
+              : 'Prescription unavailable',
+            code === 'invalid-input'
+              ? 'Enter a whole number of zero or more. Add stock requires a number greater than zero within the supported range.'
+              : 'This prescription is no longer available. Choose another prescription or None / Unlinked.',
+          );
+        } else {
+          edit(null);
+          setNotice(
+            'The change could not be confirmed. Check the reloaded medication list before trying again.',
+          );
+          await reload();
+        }
+      }
+    } finally {
+      busyRef.current = false;
+      if (mounted.current) {
+        setBusy(false);
+      }
+    }
+  }
+
+  function requestAction(record: MedicationRecord, action: MedicationAction) {
+    if (!available()) {
+      return;
+    }
+    const snapshot = stateRef.current!;
+    // A callback from an old card must never act on a newer snapshot.
+    if (snapshot.records.find(item => item.id === record.id) !== record) {
+      return;
+    }
+    if (action === 'edit') {
+      edit({ mode: 'edit', record, snapshot });
+      return;
+    }
+    interaction.current = true;
     let consumed = false;
+    function consume() {
+      if (consumed) {
+        return false;
+      }
+      consumed = true;
+      interaction.current = false;
+      return (
+        mounted.current && !busyRef.current && stateRef.current === snapshot
+      );
+    }
+    if (action === 'delete') {
+      Alert.alert(
+        'Delete medication',
+        `Delete ${record.displayName} and its recorded stock? Its prescription will be kept.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              consume();
+            },
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              if (consume()) {
+                return run(() => service.remove(snapshot, record.id));
+              }
+            },
+          },
+        ],
+        {
+          cancelable: true,
+          onDismiss: () => {
+            consume();
+          },
+        },
+      );
+      return;
+    }
+    const stockAction =
+      action === 'correct' && record.stock === null ? 'record' : action;
     const title =
-      action === 'rename'
-        ? 'Edit medication name'
-        : action === 'add'
+      stockAction === 'add'
         ? 'Add stock'
-        : action === 'record'
+        : stockAction === 'record'
         ? 'Record current stock'
         : 'Correct stock';
     Alert.prompt(
       title,
-      action === 'rename'
-        ? 'Enter a name for this medication.'
-        : action === 'add'
+      stockAction === 'add'
         ? 'Enter the number of tablets to add.'
-        : action === 'record'
-        ? 'Enter the current number of tablets you physically have.'
-        : 'Enter the current number of tablets you physically have. This replaces the recorded stock total.',
+        : 'Enter the number of tablets you physically have. This becomes the recorded total.',
       [
         {
           text: 'Cancel',
           style: 'cancel',
           onPress: () => {
-            if (!consumed) {
-              consumed = true;
-              promptOpen.current = false;
-            }
+            consume();
           },
         },
         {
           text:
-            action === 'rename'
-              ? 'Save'
-              : action === 'add'
+            stockAction === 'add'
               ? 'Add'
-              : action === 'record'
+              : stockAction === 'record'
               ? 'Record'
               : 'Replace total',
-          onPress: async value => {
-            if (consumed) {
-              return;
-            }
-            consumed = true;
-            promptOpen.current = false;
-            if (
-              !mounted.current ||
-              busy.current ||
-              currentStock.current.status !== 'ready'
-            ) {
-              return;
-            }
-            const input = value?.trim() ?? '';
-            const amount = Number(input);
-            const total =
-              action === 'add' ? (state.count as number) + amount : amount;
-            if (
-              action === 'rename'
-                ? !input
-                : !/^\d+$/.test(input) ||
-                  !Number.isSafeInteger(amount) ||
-                  amount < (action === 'add' ? 1 : 0) ||
-                  !Number.isSafeInteger(total)
-            ) {
-              Alert.alert(
-                action === 'rename' ? 'Invalid name' : 'Invalid amount',
-                action === 'rename'
-                  ? 'Enter a medication name.'
-                  : action === 'add'
-                  ? 'Enter a whole number greater than zero within the supported range.'
-                  : 'Enter a whole number of zero or more within the supported range.',
+          onPress: value => {
+            if (consume()) {
+              return run(() =>
+                service.changeStock(
+                  snapshot,
+                  record.id,
+                  stockAction,
+                  value ?? '',
+                ),
               );
-              return;
-            }
-            // A ref closes the gap before React renders the disabled controls.
-            busy.current = true;
-            setSaving(true);
-            try {
-              if (action === 'rename') {
-                await saveMedicationName(input);
-              } else {
-                await saveMedicationStock(total);
-              }
-              if (mounted.current) {
-                updateState({
-                  ...state,
-                  ...(action === 'rename' ? { name: input } : { count: total }),
-                });
-              }
-            } catch {
-              if (mounted.current) {
-                Alert.alert(
-                  action === 'rename'
-                    ? 'Unable to save name'
-                    : 'Unable to save stock',
-                  action === 'rename'
-                    ? 'Your medication name could not be saved. Please try again.'
-                    : 'Your stock amount could not be saved. Please try again.',
-                );
-              }
-            } finally {
-              busy.current = false;
-              if (mounted.current) {
-                setSaving(false);
-              }
             }
           },
         },
       ],
       'plain-text',
-      action === 'rename' ? state.name : '',
-      action === 'rename' ? 'default' : 'number-pad',
+      '',
+      'number-pad',
     );
   }
 
-  const recorded = stock.status === 'ready' && stock.count !== null;
-  const disabled = stock.status !== 'ready' || saving;
-  const name = stock.status === 'ready' ? stock.name : DEFAULT_MEDICATION_NAME;
-  const actions: { name: MedicationAction; label: string }[] = disabled
-    ? []
-    : [
-        ...(recorded
-          ? [
-              { name: 'add' as const, label: 'Add stock' },
-              { name: 'correct' as const, label: 'Correct stock' },
-            ]
-          : [{ name: 'record' as const, label: 'Record current stock' }]),
-        { name: 'rename', label: 'Edit medication name' },
-      ];
-
-  function showActions() {
-    if (
-      !mounted.current ||
-      busy.current ||
-      promptOpen.current ||
-      currentStock.current.status !== 'ready'
-    ) {
+  function showActions(record: MedicationRecord) {
+    if (!available()) {
       return;
     }
-    promptOpen.current = true;
+    interaction.current = true;
     let consumed = false;
+    const actions = medicationActions(record);
     ActionSheetIOS.showActionSheetWithOptions(
       {
-        title: currentStock.current.name,
+        title: record.displayName,
         options: [...actions.map(action => action.label), 'Cancel'],
+        destructiveButtonIndex: 3,
         cancelButtonIndex: actions.length,
       },
       index => {
@@ -256,106 +259,174 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
           return;
         }
         consumed = true;
-        promptOpen.current = false;
+        interaction.current = false;
         const action = actions[index];
         if (action) {
-          requestAction(action.name);
+          requestAction(record, action.name);
         }
       },
     );
   }
-
-  const stockDescription =
-    stock.status === 'loading'
-      ? 'Loading stock…'
-      : stock.status === 'error'
-      ? 'Unable to load stock'
-      : stock.count === null
-      ? 'Stock not recorded'
-      : `Recorded stock: ${stock.count} tablets`;
-  const textColour = { color: theme.colours.textPrimary };
-  const actionColour = { color: theme.colours.primary };
-
+  async function saveDetails(session: Editor, details: MedicationDetails) {
+    if (!mounted.current || editorRef.current !== session) {
+      return;
+    }
+    await run(() =>
+      session.mode === 'migrate'
+        ? service.completeLegacy(session.snapshot, details.displayName)
+        : service.saveDetails(
+            session.snapshot,
+            details,
+            session.mode === 'edit' ? session.record.id : undefined,
+          ),
+    );
+  }
+  function button(label: string, onPress: () => void, disabled = busy) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={onPress}
+        style={styles.action}
+      >
+        <Text style={[typography.bodyStrong, { color: theme.colours.primary }]}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  }
+  const text = [typography.body, { color: theme.colours.textPrimary }];
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.colours.background }]}
     >
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.content,
           { paddingHorizontal: goldenScreenPadding(width) },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Library"
-          accessibilityState={{ disabled: saving }}
-          disabled={saving}
-          onPress={() => {
-            if (!busy.current || currentStock.current.status !== 'ready') {
-              onBack();
-            }
-          }}
-          style={styles.action}
-        >
-          <Text style={[typography.bodyStrong, actionColour]}>Back</Text>
-        </Pressable>
+        {button('Back to Library', () => {
+          if (!busyRef.current && !interaction.current) {
+            onBack();
+          }
+        })}
         <Text
           accessibilityRole="header"
-          style={[typography.screenTitle, styles.title, textColour]}
+          style={[
+            typography.screenTitle,
+            styles.title,
+            { color: theme.colours.textPrimary },
+          ]}
         >
           Medication
         </Text>
-        <AppCard>
-          <Pressable
-            testID="medication-summary"
-            accessible
-            accessibilityLabel={`${name}, ${stockDescription}`}
-            accessibilityHint="Touch and hold for medication actions, or use accessibility actions."
-            accessibilityRole={stock.status === 'error' ? 'alert' : undefined}
-            accessibilityState={{ busy: saving || stock.status === 'loading' }}
-            style={styles.summary}
-            accessibilityActions={actions}
-            onAccessibilityAction={event => {
-              const action = actions.find(
-                item => item.name === event.nativeEvent.actionName,
-              );
-              if (action) {
-                requestAction(action.name);
+        {button(
+          'Add medication',
+          () => {
+            if (available() && stateRef.current!.pendingLegacy === null) {
+              edit({ mode: 'add', snapshot: stateRef.current! });
+            }
+          },
+          busy || !state || !!state.pendingLegacy || !!editor,
+        )}
+        {busy && !state && !failed && (
+          <Text style={text}>Loading medications…</Text>
+        )}
+        {failed && (
+          <>
+            <Text accessibilityRole="alert" style={text}>
+              Your saved medications could not be read. Retry before making
+              changes.
+            </Text>
+            {button('Retry loading medications', async () => {
+              if (busyRef.current) {
+                return;
               }
-            }}
-            onLongPress={showActions}
-          >
-            <Text style={[typography.cardTitle, textColour]}>{name}</Text>
-            <Text style={[typography.bodyStrong, styles.stock, textColour]}>
-              {stockDescription}
+              busyRef.current = true;
+              setBusy(true);
+              await reload();
+              busyRef.current = false;
+              if (mounted.current) {
+                setBusy(false);
+              }
+            })}
+          </>
+        )}
+        {notice !== '' && (
+          <Text accessibilityRole="alert" style={text}>
+            {notice}
+          </Text>
+        )}
+        {state?.pendingLegacy && (
+          <AppCard style={styles.card}>
+            <Text style={text}>Saved medication — name needed</Text>
+            <Text style={text}>
+              Recorded stock: {state.pendingLegacy.stock} tablets
             </Text>
-          </Pressable>
-          {stock.status === 'error' && (
-            <>
-              <Text style={[typography.body, textColour]}>
-                Your saved medication details could not be read. Retry before
-                making changes.
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Retry stock loading"
-                onPress={loadStock}
-                style={styles.action}
-              >
-                <Text style={[typography.bodyStrong, actionColour]}>Retry</Text>
-              </Pressable>
-            </>
-          )}
-          {saving && (
+            <Text style={text}>
+              Enter a name to finish keeping this medication. Your saved stock
+              is preserved.
+            </Text>
+            {button(
+              'Complete medication details',
+              () => {
+                if (available()) {
+                  edit({ mode: 'migrate', snapshot: stateRef.current! });
+                }
+              },
+              busy || !!editor,
+            )}
+          </AppCard>
+        )}
+        {editor ? (
+          <AppCard style={styles.card}>
             <Text
-              accessibilityRole="alert"
-              style={[typography.body, textColour]}
+              accessibilityRole="header"
+              style={[
+                typography.cardTitle,
+                { color: theme.colours.textPrimary },
+              ]}
             >
-              Saving medication…
+              {editor.mode === 'add'
+                ? 'New medication'
+                : editor.mode === 'migrate'
+                ? 'Complete medication details'
+                : 'Edit medication'}
             </Text>
-          )}
-        </AppCard>
+            <MedicationForm
+              initial={editor.mode === 'edit' ? editor.record : undefined}
+              migration={editor.mode === 'migrate'}
+              busy={busy}
+              onSave={details => saveDetails(editor, details)}
+              onCancel={() => {
+                if (!busyRef.current) {
+                  edit(null);
+                }
+              }}
+            />
+          </AppCard>
+        ) : (
+          <>
+            {state?.records.length === 0 && !state.pendingLegacy && (
+              <Text style={text}>
+                No medications saved. Add a medication to get started.
+              </Text>
+            )}
+            {state?.records.map(record => (
+              <MedicationCard
+                key={record.id}
+                record={record}
+                disabled={busy}
+                onAction={action => requestAction(record, action)}
+                onLongPress={() => showActions(record)}
+              />
+            ))}
+          </>
+        )}
         <Text
           style={[
             typography.caption,
@@ -363,26 +434,18 @@ function MedicationScreen({ onBack }: { onBack: () => void }) {
             { color: theme.colours.textSecondary },
           ]}
         >
-          Touch and hold the card for actions. Stock is saved on this device and
+          Touch and hold a card for actions. Stock is saved on this device and
           updated manually.
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   content: { paddingBottom: spacing.xxl },
   title: { marginTop: spacing.sm, marginBottom: spacing.lg },
-  stock: { marginTop: spacing.sm },
-  summary: { minHeight: layout.minimumTouchTarget },
-  action: {
-    minHeight: layout.minimumTouchTarget,
-    minWidth: layout.minimumTouchTarget,
-    justifyContent: 'center',
-  },
+  card: { marginVertical: spacing.sm },
   note: { marginTop: spacing.lg },
+  action: { minHeight: layout.minimumTouchTarget, justifyContent: 'center' },
 });
-
-export default MedicationScreen;
