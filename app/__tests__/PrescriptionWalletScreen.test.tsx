@@ -179,6 +179,51 @@ function content() {
   return JSON.stringify(screen.toJSON());
 }
 
+test.each([
+  [0, 'EXPIRING SOON'],
+  [1, 'EXPIRING SOON'],
+  [30, 'EXPIRING SOON'],
+  [31, null],
+  [-1, 'EXPIRED'],
+] as const)(
+  'shows the derived badge with %s days remaining',
+  async (days, badge) => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2028, 2, 1, 12));
+    try {
+      const date = new Date(2028, 2, 1 + days, 12);
+      const expiresOn = [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+      ].join('-');
+      const record = { ...first, expiresOn };
+      state = { records: [record], pendingCleanup: [] };
+      await renderScreen();
+      const text = card(first.id)
+        .findAllByType(require('react-native').Text)
+        .map(node => node.props.children);
+      if (badge) {
+        expect(text).toContain(badge);
+        expect(card(first.id).props.accessibilityLabel).toContain(badge);
+      } else {
+        expect(text).toHaveLength(2);
+        expect(card(first.id).props.accessibilityLabel).not.toMatch(
+          /EXPIRED|EXPIRING SOON/,
+        );
+      }
+      await tapCard(first.id);
+      expect(native.open).toHaveBeenCalledWith(first.documentId);
+      expect(state.records).toEqual([record]);
+      expect(native.remove).not.toHaveBeenCalled();
+      expect(native.updateMetadata).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => screen.unmount());
+      jest.useRealTimers();
+    }
+  },
+);
+
 test('new prescriptions reject missing or blank names before opening Files', async () => {
   await renderScreen();
   await press('Add prescription');
