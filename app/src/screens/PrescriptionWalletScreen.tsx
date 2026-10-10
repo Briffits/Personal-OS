@@ -31,13 +31,18 @@ import {
 import { NativePrescriptionDocuments } from '../native/NativePrescriptionDocuments';
 import PrescriptionMetadataForm from '../components/PrescriptionMetadataForm';
 import PrescriptionCard from '../components/PrescriptionCard';
+import { medicationService } from '../medications/currentMedicationService';
+import {
+  createPrescriptionDeletionCoordinator,
+  PrescriptionDeletionError,
+} from '../coordination/prescriptionDeletion';
 
 function confirmChange(action: 'Replace' | 'Delete'): Promise<boolean> {
   return new Promise(resolve => {
     Alert.alert(
       action + ' Prescription',
       action === 'Delete'
-        ? 'Delete this saved prescription from Personal OS? The original source document will not be deleted.'
+        ? 'Delete this saved prescription from Personal OS and unlink its medications? Medications and stock will be kept. The original source document will not be deleted.'
         : 'Replace the document for this prescription? Its details will stay the same.',
       [
         { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
@@ -54,6 +59,10 @@ const prescriptionService = createPrescriptionService({
   confirmReplacement: () => confirmChange('Replace'),
   confirmDeletion: () => confirmChange('Delete'),
 });
+const deletePrescription = createPrescriptionDeletionCoordinator(
+  prescriptionService,
+  medicationService,
+);
 
 function localDate() {
   const date = new Date();
@@ -173,7 +182,13 @@ export default function PrescriptionWalletScreen({
         error !== null &&
         'code' in error &&
         error.code === 'prescription_documents_authentication_cancelled';
-      if (uncertain) {
+      if (error instanceof PrescriptionDeletionError) {
+        setNotice(
+          error.code === 'unlink-unconfirmed'
+            ? 'Medication unlinking could not be confirmed, so prescription deletion was stopped. The prescription is kept; medication links may already be cleared. Check Medication, then retry deletion.'
+            : 'Medications were unlinked and their stock was kept, but prescription deletion could not be confirmed. Check the reloaded prescriptions before retrying.',
+        );
+      } else if (uncertain) {
         setEditor(null);
         setNotice(
           'The change may have been saved. Check the reloaded wallet before trying again.',
@@ -424,14 +439,12 @@ export default function PrescriptionWalletScreen({
                 }
                 onDelete={() =>
                   run(async () => {
-                    const result = await prescriptionService.deletePrescription(
-                      record.id,
-                    );
+                    const result = await deletePrescription(record.id);
                     if (result.status !== 'cancelled') {
                       setNotice(
                         result.status === 'deleted'
-                          ? 'Prescription deleted.'
-                          : 'Prescription deleted. Document cleanup needs to be retried.',
+                          ? 'Prescription deleted. Medications were unlinked and kept.'
+                          : 'Prescription deleted. Medications were unlinked and kept. Document cleanup needs to be retried.',
                       );
                     }
                   })

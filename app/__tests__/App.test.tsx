@@ -2,19 +2,20 @@ import React from 'react';
 import { Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import App from '../App';
-import {
-  loadMedicationStock,
-  saveMedicationStock,
-} from '../src/storage/medicationStockStorage';
+import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
+import {
+  firstId,
+  prescriptionId,
+  medicationFixture,
+} from '../test-utils/medicationFixture';
 
 jest.mock(
   'react-native-safe-area-context',
   () => require('react-native-safe-area-context/jest/mock').default,
 );
-jest.mock('../src/storage/medicationStockStorage', () => ({
-  loadMedicationStock: jest.fn(),
-  saveMedicationStock: jest.fn(),
+jest.mock('../src/native/NativeMedicationStorage', () => ({
+  NativeMedicationStorage: { read: jest.fn(), mutate: jest.fn() },
 }));
 jest.mock('../src/native/NativePrescriptionDocuments', () => ({
   NativePrescriptionDocuments: {
@@ -30,41 +31,41 @@ jest.mock('../src/native/NativePrescriptionDocuments', () => ({
     open: jest.fn(),
   },
 }));
-
 let screen: ReactTestRenderer.ReactTestRenderer;
-const loadStock = jest.mocked(loadMedicationStock);
-const saveStock = jest.mocked(saveMedicationStock);
-
+let fixture: ReturnType<typeof medicationFixture>;
 beforeEach(async () => {
   jest.clearAllMocks();
+  fixture = medicationFixture();
+  jest.mocked(NativeMedicationStorage.read).mockImplementation(fixture.read);
+  jest
+    .mocked(NativeMedicationStorage.mutate)
+    .mockImplementation(fixture.mutate);
   jest
     .mocked(NativePrescriptionDocuments.read)
     .mockResolvedValue({ records: [], pendingCleanup: [] });
-  loadStock.mockReset().mockResolvedValue(12);
-  saveStock.mockReset().mockResolvedValue(undefined);
   await act(async () => {
     screen = ReactTestRenderer.create(<App />);
   });
 });
-
 afterEach(async () => {
   await act(async () => screen.unmount());
   jest.restoreAllMocks();
 });
-
 async function press(label: string) {
   await act(async () =>
     screen.root.findByProps({ accessibilityLabel: label }).props.onPress(),
   );
 }
-
-function expectAbsent(label: string) {
+function card() {
+  return screen.root.findByProps({ testID: `medication-card-${firstId}` });
+}
+function absent(label: string) {
   expect(
     screen.root.findAllByProps({ accessibilityLabel: label }),
   ).toHaveLength(0);
 }
 
-test('renders the existing four main destinations with Today selected', () => {
+test('renders the four main destinations with Today selected', () => {
   for (const tab of ['Today', 'Ask', 'Capture', 'Library']) {
     expect(
       screen.root.findByProps({ accessibilityLabel: tab + ' tab' }).props
@@ -74,83 +75,105 @@ test('renders the existing four main destinations with Today selected', () => {
 });
 
 test.each(['Medication', 'Prescriptions'])(
-  '%s is independently reachable from Library and returns to Library',
+  '%s is independently reachable and returns to Library',
   async destination => {
     await press('Library tab');
-    expect(
-      screen.root.findByProps({ accessibilityLabel: 'Open Medication' }),
-    ).toBeDefined();
-    expect(
-      screen.root.findByProps({ accessibilityLabel: 'Open Prescriptions' }),
-    ).toBeDefined();
     await press('Open ' + destination);
     expect(
       screen.root
         .findAllByProps({ accessibilityRole: 'header' })
         .some(node => node.props.children === destination),
     ).toBe(true);
-    expectAbsent('Library tab');
+    absent('Library tab');
     if (destination === 'Medication') {
-      for (const label of ['Add Stock', 'Correct Stock']) {
-        expect(
-          screen.root.findByProps({ accessibilityLabel: label }),
-        ).toBeDefined();
-      }
-      expectAbsent('View Prescription');
-      expectAbsent('Replace Prescription');
-      expect(loadStock).toHaveBeenCalledTimes(1);
+      expect(card().props.accessibilityActions).toContainEqual({
+        name: 'add',
+        label: 'Add stock',
+      });
+      expect(NativeMedicationStorage.read).toHaveBeenCalledTimes(1);
+      expect(NativePrescriptionDocuments.read).not.toHaveBeenCalled();
     } else {
-      expect(
-        screen.root.findByProps({ accessibilityLabel: 'Add prescription' }),
-      ).toBeDefined();
-      expectAbsent('Add Stock');
-      expectAbsent('Correct Stock');
-      expect(loadStock).not.toHaveBeenCalled();
+      expect(NativeMedicationStorage.read).not.toHaveBeenCalled();
+      expect(NativePrescriptionDocuments.read).toHaveBeenCalledTimes(1);
     }
-    for (const [name, method] of Object.entries(NativePrescriptionDocuments)) {
-      if (name !== 'read') {
-        expect(method).not.toHaveBeenCalled();
+    for (const [method, fn] of Object.entries(NativePrescriptionDocuments)) {
+      if (method !== 'read') {
+        expect(fn).not.toHaveBeenCalled();
       }
     }
-    expect(NativePrescriptionDocuments.read).toHaveBeenCalledTimes(
-      destination === 'Prescriptions' ? 1 : 0,
-    );
     await press('Back to Library');
-    expect(
-      screen.root.findByProps({ accessibilityLabel: 'Library tab' }).props
-        .accessibilityState,
-    ).toEqual({ selected: true });
     await press('Today tab');
-    expectAbsent('Open Medication');
-    expect(
-      screen.root.findByProps({ accessibilityLabel: 'Today tab' }).props
-        .accessibilityState,
-    ).toEqual({ selected: true });
+    absent('Open Medication');
   },
 );
 
-test('saved stock reloads after visiting Prescriptions and returning to Medication', async () => {
-  let persistedStock = 12;
-  loadStock.mockImplementation(async () => persistedStock);
-  saveStock.mockImplementation(async amount => {
-    persistedStock = amount;
-  });
+test('independent stock and names persist across navigation through Prescriptions', async () => {
   const prompt = jest.spyOn(Alert, 'prompt').mockImplementation(() => {});
   await press('Library tab');
   await press('Open Medication');
-  await press('Add Stock');
+  await act(async () =>
+    card().props.onAccessibilityAction({ nativeEvent: { actionName: 'add' } }),
+  );
   const buttons = prompt.mock.calls[0][2] as {
-    onPress?: (value: string) => void;
+    onPress: (value: string) => Promise<void>;
   }[];
-  await act(async () => buttons[1].onPress!('3'));
-  expect(saveStock).toHaveBeenCalledWith(15);
+  await act(async () => buttons[1].onPress('3'));
+  await act(async () =>
+    card().props.onAccessibilityAction({ nativeEvent: { actionName: 'edit' } }),
+  );
+  await act(async () =>
+    screen.root
+      .findByProps({ accessibilityLabel: 'Medication name (required)' })
+      .props.onChangeText('Renamed example'),
+  );
+  await press('Save medication');
   await press('Back to Library');
   await press('Open Prescriptions');
-  expect(JSON.stringify(screen.toJSON())).not.toContain('Estimated stock');
+  expect(JSON.stringify(screen.toJSON())).not.toContain('Recorded stock');
   await press('Back to Library');
   await press('Open Medication');
-  expect(loadStock).toHaveBeenCalledTimes(2);
-  expect(JSON.stringify(screen.toJSON())).toContain(
-    'Estimated stock: 15 tablets',
+  expect(card().props.accessibilityLabel).toBe(
+    'Renamed example, Recorded stock: 15 tablets',
   );
+  expect(fixture.state().records[1].stock).toBeNull();
+});
+
+test('prescription deletion never deletes medications or their stock', async () => {
+  await fixture.mutate(0, {
+    type: 'edit',
+    id: firstId,
+    displayName: 'Example one',
+    prescriptionId,
+  });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  jest.mocked(NativePrescriptionDocuments.read).mockResolvedValue({
+    records: [
+      {
+        id: prescriptionId as never,
+        documentId: firstId as never,
+        displayName: 'Example prescription',
+        kind: 'standard',
+        expiresOn: '2028-01-01',
+        medicationIds: [firstId],
+      },
+    ],
+    pendingCleanup: [],
+  });
+  await press('Library tab');
+  await press('Open Prescriptions');
+  await act(async () =>
+    screen.root
+      .findByProps({ testID: `prescription-card-${prescriptionId}` })
+      .props.onAccessibilityAction({ nativeEvent: { actionName: 'delete' } }),
+  );
+  const buttons = alert.mock.calls[0][2]!;
+  await act(async () => buttons[1].onPress!());
+  expect(NativePrescriptionDocuments.remove).toHaveBeenCalledTimes(1);
+  expect(NativeMedicationStorage.read).toHaveBeenCalledTimes(1);
+  expect(NativeMedicationStorage.mutate).toHaveBeenCalledWith(1, {
+    type: 'unlinkPrescription',
+    prescriptionId,
+  });
+  expect(fixture.state().records[0].stock).toBe(12);
+  expect(fixture.state().records[0].prescriptionId).toBeNull();
 });

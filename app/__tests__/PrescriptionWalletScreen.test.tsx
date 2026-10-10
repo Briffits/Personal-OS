@@ -3,10 +3,13 @@ import { ActionSheetIOS, Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import PrescriptionWalletScreen from '../src/screens/PrescriptionWalletScreen';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
+import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import {
-  loadMedicationStock,
-  saveMedicationStock,
-} from '../src/storage/medicationStockStorage';
+  initialCollection,
+  medicationFixture,
+  prescriptionId,
+  otherPrescriptionId,
+} from '../test-utils/medicationFixture';
 import type {
   PrescriptionRecord,
   PrescriptionMetadata,
@@ -33,9 +36,8 @@ jest.mock('../src/native/NativePrescriptionDocuments', () => ({
     open: jest.fn(),
   },
 }));
-jest.mock('../src/storage/medicationStockStorage', () => ({
-  loadMedicationStock: jest.fn(),
-  saveMedicationStock: jest.fn(),
+jest.mock('../src/native/NativeMedicationStorage', () => ({
+  NativeMedicationStorage: { read: jest.fn(), mutate: jest.fn() },
 }));
 
 const native = jest.mocked(NativePrescriptionDocuments);
@@ -46,14 +48,14 @@ const metadata: PrescriptionMetadata = {
 };
 const first = {
   ...metadata,
-  id: 'record-one',
+  id: prescriptionId,
   documentId: 'document-one',
 } as PrescriptionRecord;
 const second = {
   ...metadata,
   kind: 'temporary',
   expiresOn: '2000-01-01',
-  id: 'record-two',
+  id: otherPrescriptionId,
   documentId: 'document-two',
 } as PrescriptionRecord;
 const candidate = 'candidate' as PrescriptionCandidateId;
@@ -63,6 +65,14 @@ let alert: jest.SpyInstance;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest
+    .mocked(NativeMedicationStorage.read)
+    .mockReset()
+    .mockResolvedValue({
+      ...initialCollection(),
+      records: [],
+    });
+  jest.mocked(NativeMedicationStorage.mutate).mockReset();
   Object.values(native).forEach(method => method.mockReset());
   state = { records: [first, second], pendingCleanup: [] };
   native.read.mockImplementation(async () => state);
@@ -314,8 +324,8 @@ test('lists multiple prescriptions, distinguishes kind/expiry and never loads st
       screen.root.findAllByProps({ accessibilityLabel: label }),
     ).toHaveLength(0);
   }
-  expect(loadMedicationStock).not.toHaveBeenCalled();
-  expect(saveMedicationStock).not.toHaveBeenCalled();
+  expect(NativeMedicationStorage.read).not.toHaveBeenCalled();
+  expect(NativeMedicationStorage.mutate).not.toHaveBeenCalled();
   expect(native.open).not.toHaveBeenCalled();
   expect(native.remove).not.toHaveBeenCalled();
 });
@@ -633,4 +643,69 @@ test('lost migration response reloads the committed record while keeping the ori
   await tapCard('migrated');
   expect(native.open).toHaveBeenCalledWith(first.documentId);
   expect(native.migrateLegacy).toHaveBeenCalledTimes(1);
+});
+
+test.each(['read-failed', 'write-failed', 'commit-uncertain'])(
+  'unlink %s reports stopped deletion without success and retains the prescription',
+  async code => {
+    const initial = initialCollection();
+    const medications = medicationFixture({
+      ...initial,
+      records: [{ ...initial.records[0], prescriptionId: first.id }],
+    });
+    jest
+      .mocked(NativeMedicationStorage.read)
+      .mockImplementation(medications.read);
+    jest
+      .mocked(NativeMedicationStorage.mutate)
+      .mockImplementation(medications.mutate);
+    if (code === 'read-failed') {
+      jest.mocked(NativeMedicationStorage.read).mockRejectedValueOnce({ code });
+    } else {
+      jest
+        .mocked(NativeMedicationStorage.mutate)
+        .mockRejectedValueOnce({ code });
+    }
+    alert.mockImplementation((_title, _message, buttons) =>
+      buttons[1].onPress(),
+    );
+    await renderScreen();
+    await accessibleAction(first.id, 'delete');
+    expect(native.remove).not.toHaveBeenCalled();
+    expect(content()).toContain('Medication unlinking could not be confirmed');
+    expect(content()).not.toContain('Prescription deleted.');
+    expect(card(first.id)).toBeDefined();
+    await accessibleAction(first.id, 'delete');
+    expect(content()).toContain(
+      'Prescription deleted. Medications were unlinked and kept.',
+    );
+    expect(medications.state().records).toEqual([
+      { ...initial.records[0], prescriptionId: null },
+    ]);
+  },
+);
+
+test('failed prescription removal after unlink explains partial completion and keeps all medication data', async () => {
+  const initial = initialCollection();
+  const medications = medicationFixture({
+    ...initial,
+    records: [{ ...initial.records[0], prescriptionId: first.id }],
+  });
+  jest
+    .mocked(NativeMedicationStorage.read)
+    .mockImplementation(medications.read);
+  jest
+    .mocked(NativeMedicationStorage.mutate)
+    .mockImplementation(medications.mutate);
+  native.remove.mockRejectedValueOnce(new Error('Unavailable'));
+  alert.mockImplementation((_title, _message, buttons) => buttons[1].onPress());
+  await renderScreen();
+  await accessibleAction(first.id, 'delete');
+  expect(content()).toContain(
+    'Medications were unlinked and their stock was kept, but prescription deletion could not be confirmed.',
+  );
+  expect(card(first.id)).toBeDefined();
+  expect(medications.state().records).toEqual([
+    { ...initial.records[0], prescriptionId: null },
+  ]);
 });

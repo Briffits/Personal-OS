@@ -31,30 +31,35 @@ The planned v1.0 stack is:
 The first working version will focus on:
 
 **Today**
+
 - NOW: one recommended next action
 - TODAY: two additional priorities
 
 **Prescription Wallet**
+
 - multiple retained standard and temporary prescriptions, independent of medications
-- required expiry dates and optional many-to-many medication links
+- required expiry dates; each medication can optionally link to one prescription
 - separate medication stock tracking
 - Apple Health integration
 - quick Face ID-protected prescription access
 
 **Apple Reminders**
+
 - source of truth for tasks
 
 **Apple Calendar**
+
 - schedule context
 
 **Help Me Start**
+
 - AI-assisted reduction of a task into one small first action
 
 Later phases will introduce features such as Gmail intelligence, configurable briefings, Waiting For, Projects, news intelligence and broader cross-source reasoning.
 
 ## Project Documentation
 
-The collection-oriented TypeScript domain and service are implemented behind an explicit storage contract. The existing screen and Swift storage still use the legacy single-current-document workflow; collection persistence and UI migration remain required. See [Prescription Wallet migration](docs/PRESCRIPTION_WALLET.md).
+Prescriptions and medications have separate collection storage and interfaces. Medication owns the canonical optional prescription reference, stable medication IDs and independent stock. See [Prescription Wallet migration](docs/PRESCRIPTION_WALLET.md) and [Medication storage, migration and validation](docs/MEDICATION.md). The medication native adapter and in-place iPhone upgrade still require Mac/device validation before merge.
 
 Detailed project documentation is available here:
 
@@ -107,3 +112,4 @@ Two additional priorities.
 
 ATTENTION
 Only genuine exceptions.
+```

@@ -1,6 +1,6 @@
 # Prescription Wallet domain, storage and migration
 
-The wallet is a standalone collection. Medication stock remains independent. Medication IDs are relationships only; neither domain owns the other. There is no backend or JavaScript document persistence.
+The wallet is a standalone collection. Medication stock remains independent. One prescription may relate to many medications, each of which may link to at most one prescription through `MedicationRecord.prescriptionId`. Prescription `medicationIds` is legacy compatibility data only, never a competing source of truth. Neither domain owns the other. There is no backend or JavaScript document persistence.
 
 ## Implementation and validation status
 
@@ -16,7 +16,7 @@ Manual simulator collection testing passed before the display-name/card refineme
 
 - kind: standard or temporary;
 - displayName: user label only, with no inferred medical meaning; optional in storage for existing v2 records;
-- medicationIds: unique non-blank IDs, including an empty list;
+- medicationIds: legacy compatibility data containing unique non-blank IDs, including an empty list; canonical links live on medications;
 - expiresOn: required real YYYY-MM-DD date;
 - issuedOn: optional, on or before expiry;
 - startsOn: optional, temporary prescriptions only, on or before expiry.
@@ -63,7 +63,7 @@ The old format is an unversioned object with optional `current` and `pendingClea
 
 The UI shows **Saved prescription — details needed**. The user can view it through the existing authenticated native `open` path before completing metadata, including after a failed completion attempt. Normal collection mutations are blocked until completion. Existing legacy cleanup debt must be retried first; that operation preserves the legacy reference.
 
-The form requires an explicit user label, kind and expiry. It does not prefill dates or invent medication links. New/migrated records are unlinked; optional dates are included only when entered. Existing medication links are preserved when editing metadata; medication linking UI is deferred until it can use real Medication IDs.
+The form requires an explicit user label, kind and expiry. It does not prefill dates or invent medication links. New/migrated prescriptions keep an empty compatibility `medicationIds` array; optional dates are included only when entered. Existing compatibility arrays are preserved when editing metadata, but never used to resolve medication links. Add/Edit Medication now selects one optional prescription by its stable record ID. Medication migration never writes prescription storage. Confirmed prescription deletion first unlinks matching medications through the Medication service; unlink failure stops deletion with an explicit notice. No medication is cascade-deleted. See [Medication](MEDICATION.md) for partial-failure and retry behaviour.
 
 `migrateLegacy` validates metadata, checks the expected legacy reference and existing document, allocates a new record ID, and atomically publishes a version 2 state referencing the **same stored document**. It never copies, moves, modifies or deletes that document.
 

@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AACC00000000000000000001 /* MedicationCollectionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000011 /* MedicationCollectionStorage.swift */; };
+		AACC00000000000000000002 /* MedicationKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000012 /* MedicationKeychain.swift */; };
+		AACC00000000000000000003 /* MedicationStorageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000013 /* MedicationStorageModule.swift */; };
+		AACC00000000000000000004 /* MedicationStorageBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000014 /* MedicationStorageBridge.m */; };
 		0C80B921A6F3F58F76C31292 /* libPods-PersonalOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-PersonalOS.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
@@ -19,6 +23,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AACC00000000000000000011 /* MedicationCollectionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationCollectionStorage.swift; sourceTree = "<group>"; };
+		AACC00000000000000000012 /* MedicationKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationKeychain.swift; sourceTree = "<group>"; };
+		AACC00000000000000000013 /* MedicationStorageModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationStorageModule.swift; sourceTree = "<group>"; };
+		AACC00000000000000000014 /* MedicationStorageBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MedicationStorageBridge.m; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* PersonalOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PersonalOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = PersonalOS/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = PersonalOS/Info.plist; sourceTree = "<group>"; };
@@ -80,6 +88,10 @@
 			isa = PBXGroup;
 			children = (
 				9BBD398C306957440016AF90 /* PrescriptionDocumentStorage.swift */,
+				AACC00000000000000000011 /* MedicationCollectionStorage.swift */,
+				AACC00000000000000000012 /* MedicationKeychain.swift */,
+				AACC00000000000000000013 /* MedicationStorageModule.swift */,
+				AACC00000000000000000014 /* MedicationStorageBridge.m */,
 				9BBD3988306933C30016AF90 /* PrescriptionDocuments.swift */,
 				9BBD3989306933C30016AF90 /* PrescriptionDocumentsBridge.m */,
 				13B07FAE1A68108700A75B9A /* PersonalOS */,
@@ -270,6 +282,10 @@
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				9B983C08306267AB00B0891C /* SceneDelegate.swift in Sources */,
 				9BBD398D306957440016AF90 /* PrescriptionDocumentStorage.swift in Sources */,
+				AACC00000000000000000001 /* MedicationCollectionStorage.swift in Sources */,
+				AACC00000000000000000002 /* MedicationKeychain.swift in Sources */,
+				AACC00000000000000000003 /* MedicationStorageModule.swift in Sources */,
+				AACC00000000000000000004 /* MedicationStorageBridge.m in Sources */,
 				9BBD398A306933C30016AF90 /* PrescriptionDocuments.swift in Sources */,
 				9BBD398B306933C30016AF90 /* PrescriptionDocumentsBridge.m in Sources */,
 			);

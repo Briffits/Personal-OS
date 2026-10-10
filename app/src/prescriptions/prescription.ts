@@ -10,6 +10,8 @@ export interface PrescriptionMetadata {
   // User label only. Absent on existing v2 records until explicitly supplied.
   readonly displayName?: string;
   readonly kind: 'standard' | 'temporary';
+  // Legacy compatibility only; MedicationRecord.prescriptionId is canonical.
+  // Preserve these bytes/values on metadata edits, but never infer links from them.
   readonly medicationIds: readonly string[];
   readonly expiresOn: string;
   readonly issuedOn?: string;
