@@ -7,7 +7,7 @@ import {
   usePersonalOSTheme,
 } from '../design-system';
 import {
-  isPrescriptionExpired,
+  getPrescriptionExpiryStatus,
   type PrescriptionRecord,
 } from '../prescriptions/prescription';
 
@@ -56,7 +56,13 @@ export default function PrescriptionCard({
   const metadata = `${
     record.kind === 'standard' ? 'Standard' : 'Temporary'
   } · Expires ${formatDate(record.expiresOn)}`;
-  const expired = isPrescriptionExpired(record, today);
+  const expiryStatus = getPrescriptionExpiryStatus(record, today);
+  const badge =
+    expiryStatus === 'expired'
+      ? 'EXPIRED'
+      : expiryStatus === 'expiring-soon'
+      ? 'EXPIRING SOON'
+      : null;
 
   function perform(action: string) {
     if (busy) {
@@ -97,7 +103,7 @@ export default function PrescriptionCard({
       testID={`prescription-card-${record.id}`}
       accessible
       accessibilityRole="button"
-      accessibilityLabel={`${name}, ${metadata}${expired ? ', EXPIRED' : ''}`}
+      accessibilityLabel={`${name}, ${metadata}${badge ? `, ${badge}` : ''}`}
       accessibilityHint="Opens the protected prescription viewer."
       accessibilityState={{ disabled: busy }}
       accessibilityActions={[
@@ -125,18 +131,18 @@ export default function PrescriptionCard({
         <Text style={[typography.body, { color: theme.colours.textSecondary }]}>
           {metadata}
         </Text>
-        {expired && (
+        {badge && (
           <Text
             style={[
               typography.bodyStrong,
-              styles.expired,
+              styles.expiryBadge,
               {
                 color: theme.colours.textPrimary,
                 borderColor: theme.colours.textPrimary,
               },
             ]}
           >
-            EXPIRED
+            {badge}
           </Text>
         )}
       </AppCard>
@@ -146,7 +152,7 @@ export default function PrescriptionCard({
 
 const styles = StyleSheet.create({
   card: { marginVertical: spacing.md, minHeight: layout.minimumTouchTarget },
-  expired: {
+  expiryBadge: {
     alignSelf: 'flex-start',
     borderWidth: 2,
     borderRadius: 4,

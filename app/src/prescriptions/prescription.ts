@@ -91,3 +91,19 @@ export function isPrescriptionExpired(
   }
   return metadata.expiresOn < on;
 }
+
+export function getPrescriptionExpiryStatus(
+  prescription: PrescriptionMetadata,
+  on: string,
+): 'expired' | 'expiring-soon' | 'current' {
+  if (isPrescriptionExpired(prescription, on)) {
+    return 'expired';
+  }
+  // Compare validated calendar dates at UTC midnight so DST cannot shift the
+  // 30-day boundary. `on` remains the caller's local calendar date.
+  const daysRemaining =
+    (Date.parse(`${prescription.expiresOn}T00:00:00Z`) -
+      Date.parse(`${on}T00:00:00Z`)) /
+    86_400_000;
+  return daysRemaining <= 30 ? 'expiring-soon' : 'current';
+}
