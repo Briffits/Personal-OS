@@ -2,6 +2,7 @@ import { ActionSheetIOS, Pressable, StyleSheet, Text } from 'react-native';
 import AppCard from '../design-system/components/AppCard';
 import {
   layout,
+  radius,
   spacing,
   typography,
   usePersonalOSTheme,
@@ -122,13 +123,24 @@ export default function PrescriptionCard({
       onLongPress={showActions}
       style={styles.card}
     >
-      <AppCard>
+      <AppCard
+        variant={
+          expiryStatus === 'expired' || expiryStatus === 'expiring-soon'
+            ? 'attention'
+            : 'standard'
+        }
+      >
         <Text
           style={[typography.cardTitle, { color: theme.colours.textPrimary }]}
         >
           {name}
         </Text>
-        <Text style={[typography.body, { color: theme.colours.textSecondary }]}>
+        <Text
+          style={[
+            typography.body,
+            { color: theme.colours.textSecondaryOnSurface },
+          ]}
+        >
           {metadata}
         </Text>
         {badge && (
@@ -155,7 +167,7 @@ const styles = StyleSheet.create({
   expiryBadge: {
     alignSelf: 'flex-start',
     borderWidth: 2,
-    borderRadius: 4,
+    borderRadius: radius.badge,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     marginTop: spacing.sm,

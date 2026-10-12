@@ -5,7 +5,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   goldenControlHeight,
@@ -23,13 +23,10 @@ type BottomNavigationProps = {
 
 const tabs: AppTab[] = ['Today', 'Ask', 'Capture', 'Library'];
 
-function BottomNavigation({
-  activeTab,
-  onTabPress,
-}: BottomNavigationProps) {
+function BottomNavigation({ activeTab, onTabPress }: BottomNavigationProps) {
   const theme = usePersonalOSTheme();
   const insets = useSafeAreaInsets();
-  const {width: screenWidth} = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
 
   const controlHeight = goldenControlHeight(screenWidth);
 
@@ -38,10 +35,11 @@ function BottomNavigation({
       style={[
         styles.container,
         {
-          backgroundColor: theme.colours.surface,
+          backgroundColor: theme.colours.navigationSurface,
           paddingBottom: Math.max(insets.bottom, spacing.sm),
         },
-      ]}>
+      ]}
+    >
       {tabs.map(tab => {
         const isActive = tab === activeTab;
 
@@ -49,7 +47,7 @@ function BottomNavigation({
           <Pressable
             key={tab}
             accessibilityRole="button"
-            accessibilityState={{selected: isActive}}
+            accessibilityState={{ selected: isActive }}
             accessibilityLabel={`${tab} tab`}
             onPress={() => onTabPress(tab)}
             style={[
@@ -57,18 +55,18 @@ function BottomNavigation({
               {
                 minHeight: controlHeight,
               },
-            ]}>
+            ]}
+          >
             <Text
               style={[
-                isActive
-                  ? typography.navigationActive
-                  : typography.navigation,
+                isActive ? typography.navigationActive : typography.navigation,
                 {
                   color: isActive
-                    ? theme.colours.primary
+                    ? theme.colours.action
                     : theme.colours.textSecondary,
                 },
-              ]}>
+              ]}
+            >
               {tab}
             </Text>
           </Pressable>

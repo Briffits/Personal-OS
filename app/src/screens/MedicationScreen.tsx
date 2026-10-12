@@ -291,7 +291,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
         onPress={onPress}
         style={styles.action}
       >
-        <Text style={[typography.bodyStrong, { color: theme.colours.primary }]}>
+        <Text style={[typography.bodyStrong, { color: theme.colours.action }]}>
           {label}
         </Text>
       </Pressable>
@@ -362,7 +362,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
           </Text>
         )}
         {state?.pendingLegacy && (
-          <AppCard style={styles.card}>
+          <AppCard variant="attention" style={styles.card}>
             <Text style={text}>Saved medication — name needed</Text>
             <Text style={text}>
               Recorded stock: {state.pendingLegacy.stock} tablets

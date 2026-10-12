@@ -82,7 +82,7 @@ function LibraryScreen({
               style={[
                 typography.body,
                 {
-                  color: theme.colours.textSecondary,
+                  color: theme.colours.textSecondaryOnSurface,
                 },
               ]}
             >
@@ -114,7 +114,7 @@ function LibraryScreen({
               style={[
                 typography.body,
                 {
-                  color: theme.colours.textSecondary,
+                  color: theme.colours.textSecondaryOnSurface,
                 },
               ]}
             >

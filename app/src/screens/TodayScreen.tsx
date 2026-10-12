@@ -1,5 +1,10 @@
-import {ScrollView, StyleSheet, Text, useWindowDimensions} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AppCard from '../design-system/components/AppCard';
 import {
   goldenScreenPadding,
@@ -10,7 +15,7 @@ import {
 
 function TodayScreen() {
   const theme = usePersonalOSTheme();
-  const {width: screenWidth} = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
 
   const horizontalPadding = goldenScreenPadding(screenWidth);
 
@@ -21,7 +26,8 @@ function TodayScreen() {
         {
           backgroundColor: theme.colours.background,
         },
-      ]}>
+      ]}
+    >
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -29,7 +35,8 @@ function TodayScreen() {
             paddingHorizontal: horizontalPadding,
           },
         ]}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         <Text
           accessibilityRole="header"
           style={[
@@ -38,7 +45,8 @@ function TodayScreen() {
             {
               color: theme.colours.textPrimary,
             },
-          ]}>
+          ]}
+        >
           Personal OS
         </Text>
 
@@ -47,13 +55,14 @@ function TodayScreen() {
             typography.sectionLabel,
             styles.sectionLabel,
             {
-              color: theme.colours.primary,
+              color: theme.colours.action,
             },
-          ]}>
+          ]}
+        >
           NOW
         </Text>
 
-        <AppCard style={styles.card}>
+        <AppCard variant="attention" style={styles.card}>
           <Text
             style={[
               typography.cardTitle,
@@ -61,7 +70,8 @@ function TodayScreen() {
               {
                 color: theme.colours.textPrimary,
               },
-            ]}>
+            ]}
+          >
             Your next priority will appear here
           </Text>
 
@@ -69,9 +79,10 @@ function TodayScreen() {
             style={[
               typography.body,
               {
-                color: theme.colours.textSecondary,
+                color: theme.colours.textSecondaryOnSurface,
               },
-            ]}>
+            ]}
+          >
             Personal OS will surface the one thing that most needs your
             attention.
           </Text>
@@ -82,13 +93,14 @@ function TodayScreen() {
             typography.sectionLabel,
             styles.sectionLabel,
             {
-              color: theme.colours.primary,
+              color: theme.colours.action,
             },
-          ]}>
+          ]}
+        >
           TODAY
         </Text>
 
-        <AppCard style={styles.card}>
+        <AppCard variant="attention" style={styles.card}>
           <Text
             style={[
               typography.cardTitle,
@@ -96,7 +108,8 @@ function TodayScreen() {
               {
                 color: theme.colours.textPrimary,
               },
-            ]}>
+            ]}
+          >
             Priority 2
           </Text>
 
@@ -104,14 +117,15 @@ function TodayScreen() {
             style={[
               typography.body,
               {
-                color: theme.colours.textSecondary,
+                color: theme.colours.textSecondaryOnSurface,
               },
-            ]}>
+            ]}
+          >
             A second important item will appear here.
           </Text>
         </AppCard>
 
-        <AppCard style={styles.card}>
+        <AppCard variant="attention" style={styles.card}>
           <Text
             style={[
               typography.cardTitle,
@@ -119,7 +133,8 @@ function TodayScreen() {
               {
                 color: theme.colours.textPrimary,
               },
-            ]}>
+            ]}
+          >
             Priority 3
           </Text>
 
@@ -127,9 +142,10 @@ function TodayScreen() {
             style={[
               typography.body,
               {
-                color: theme.colours.textSecondary,
+                color: theme.colours.textSecondaryOnSurface,
               },
-            ]}>
+            ]}
+          >
             A third important item will appear here.
           </Text>
         </AppCard>

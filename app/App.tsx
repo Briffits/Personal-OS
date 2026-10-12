@@ -1,6 +1,6 @@
-import {useState} from 'react';
-import {StatusBar, useColorScheme} from 'react-native';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
+import { useState } from 'react';
+import { StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import BottomNavigation, {
   type AppTab,
@@ -10,10 +10,12 @@ import MedicationScreen from './src/screens/MedicationScreen';
 import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
 import TodayScreen from './src/screens/TodayScreen';
 
+import { usePersonalOSTheme } from './src/design-system';
+
 type AppScreen = 'main' | 'medication' | 'prescriptionWallet';
 
 function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+  const theme = usePersonalOSTheme();
   const [activeTab, setActiveTab] = useState<AppTab>('Today');
   const [activeScreen, setActiveScreen] = useState<AppScreen>('main');
 
@@ -29,9 +31,7 @@ function App() {
 
     if (activeScreen === 'prescriptionWallet') {
       return (
-        <PrescriptionWalletScreen
-          onBack={() => setActiveScreen('main')}
-        />
+        <PrescriptionWalletScreen onBack={() => setActiveScreen('main')} />
       );
     }
 
@@ -55,13 +55,10 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
       {renderScreen()}
       {activeScreen === 'main' && (
-        <BottomNavigation
-          activeTab={activeTab}
-          onTabPress={handleTabPress}
-        />
+        <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} />
       )}
     </SafeAreaProvider>
   );

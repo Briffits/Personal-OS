@@ -1,3 +1,4 @@
+import AppCard from '../src/design-system/components/AppCard';
 import React from 'react';
 import { ActionSheetIOS, Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
@@ -203,6 +204,9 @@ test.each([
       const text = card(first.id)
         .findAllByType(require('react-native').Text)
         .map(node => node.props.children);
+      expect(card(first.id).findByType(AppCard).props.variant).toBe(
+        days <= 30 ? 'attention' : 'standard',
+      );
       if (badge) {
         expect(text).toContain(badge);
         expect(card(first.id).props.accessibilityLabel).toContain(badge);
