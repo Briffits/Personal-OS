@@ -46,7 +46,7 @@ test('missing appearance uses light and dark retains compatibility colours', () 
       textPrimary: '#F5F7F8',
       textSecondary: '#B8BEC3',
       textSecondaryOnSurface: '#B8BEC3',
-      action: '#245C6A',
+      action: '#8EB5AE',
       borderSubtle: '#1C2023',
       borderControl: '#B8BEC3',
     },
