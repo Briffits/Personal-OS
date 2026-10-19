@@ -1,3 +1,4 @@
+import { stockFields } from '../test-utils/medicationFixture';
 import { createPrescriptionDeletionCoordinator } from '../src/coordination/prescriptionDeletion';
 import { createMedicationService } from '../src/medications/medicationService';
 import {
@@ -76,7 +77,7 @@ test.each([1, 3])(
       ...linked,
       id: `${String(index + 1).padStart(8, '0')}-1111-4111-8111-111111111111`,
       displayName: `Synthetic ${index}`,
-      stock: index === 0 ? null : index - 1,
+      ...stockFields(index === 0 ? null : index - 1),
     }));
     const other = {
       ...linked,

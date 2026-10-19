@@ -204,7 +204,6 @@ Example:
 ```text
 Medication A
 Estimated stock: 23 tablets
-Approximately 23 days remaining
 
 [View Prescription] [Add Stock] [Correct Stock]
 ```
@@ -492,3 +491,7 @@ Everything else in the application exists to support that outcome.
 Personal OS is currently in the **product definition and architecture stage** as part of the Codistry Zero to AI Builder learning process.
 
 The immediate next step is to turn this product vision into a smaller MVP specification and begin implementation with the iPhone application shell and Prescription Wallet.
+
+## Medication 1.0 implementation boundary
+
+Phase 1 adds version-2 local stock inputs, fractional counts, optional user-defined thresholds and pure read-only Health-facing contracts. HealthKit native integration and linking are deferred to separately approved Phase 2. Stock estimates are derived; migration preserves untimestamped counts until an explicit physical baseline replaces them. See [Medication](MEDICATION.md) and [post-1.0 deferred work](NEXT_ITERATION_DEVELOPMENTS.md).

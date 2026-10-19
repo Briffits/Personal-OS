@@ -17,7 +17,11 @@ test('read and mutation preserve all public fields and forward revision', async 
     mutate: jest.fn(async () => state),
   };
   expect(await NativeMedicationStorage.read()).toEqual(state);
-  const command = { type: 'setStock' as const, id: firstId, stock: 0 };
+  const command = {
+    type: 'establishBaseline' as const,
+    id: firstId,
+    quantity: 0,
+  };
   expect(await NativeMedicationStorage.mutate(4, command)).toEqual(state);
   expect(NativeModules.MedicationStorage.mutate).toHaveBeenCalledWith(
     4,

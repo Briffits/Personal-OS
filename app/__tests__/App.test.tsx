@@ -1,3 +1,4 @@
+import { recordedQuantity } from '../src/medications/medicationStock';
 import * as ReactNative from 'react-native';
 import AppCard from '../src/design-system/components/AppCard';
 import React from 'react';
@@ -135,9 +136,9 @@ test('independent stock and names persist across navigation through Prescription
   await press('Back to Library');
   await press('Open Medication');
   expect(card().props.accessibilityLabel).toBe(
-    'Renamed example, Recorded stock: 15 tablets',
+    'Renamed example, Recorded stock: 15 units',
   );
-  expect(fixture.state().records[1].stock).toBeNull();
+  expect(recordedQuantity(fixture.state().records[1])).toBeNull();
 });
 
 test('prescription deletion never deletes medications or their stock', async () => {
@@ -176,7 +177,7 @@ test('prescription deletion never deletes medications or their stock', async () 
     type: 'unlinkPrescription',
     prescriptionId,
   });
-  expect(fixture.state().records[0].stock).toBe(12);
+  expect(recordedQuantity(fixture.state().records[0])).toBe(12);
   expect(fixture.state().records[0].prescriptionId).toBeNull();
 });
 

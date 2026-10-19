@@ -1,92 +1,94 @@
-# Medication collection
+# Medication — Phase 1 of Medication 1.0
 
-Medication is independent of Prescription Wallet. It owns names, IDs, manually recorded stock and one optional prescription reference. Apple Health owns scheduling and dose logging; neither is introduced here.
+Medication owns physical stock, adjustments and the canonical optional `prescriptionId`. Prescription Wallet remains a separate document domain. Apple Health owns schedules, reminders and dose logging.
 
-## Schema and relationship
+Phase 1 implements local stock schema/migration and pure read-only Health-facing contracts. **There is no native HealthKit implementation, Health entitlement, Health bridge, authorization prompt or Health-linking UI in this phase.** Phase 2 requires separate approval. No dependencies were added.
 
-The JSON envelope in Keychain service/account `com.personalos.medication-collection` / `medication-collection` is:
+## Version 2 storage
+
+The existing Keychain service/account remains `com.personalos.medication-collection` / `medication-collection`:
 
 ```ts
+type MedicationCollection = {
+  schemaVersion: 2;
+  revision: number; // nonnegative safe integer
+  records: MedicationRecord[];
+  pendingLegacy: { id: string; stock: number; prescriptionId: null } | null;
+};
 type MedicationRecord = {
   id: string;
   displayName: string;
-  stock: number | null;
   prescriptionId: string | null;
-};
-type MedicationCollection = {
-  schemaVersion: 1;
-  revision: number;
-  records: MedicationRecord[];
-  pendingLegacy: {
+  stockUnit: "count";
+  stockBaseline: {
     id: string;
-    stock: number;
-    prescriptionId: null;
+    quantity: number;
+    recordedAt: string; // canonical UTC YYYY-MM-DDTHH:mm:ss.sssZ
+    healthKitConceptReference: string | null;
   } | null;
+  stockAdditions: {
+    id: string;
+    baselineId: string;
+    quantity: number;
+    recordedAt: string;
+  }[];
+  legacyRecordedStock: number | null;
+  lowStockThreshold: number | null;
+  healthKitLink: { conceptReference: string } | null;
 };
 ```
 
-IDs are native-generated lowercase UUIDs, never derived from names or positions. Duplicate names may coexist. Names must be non-blank. Stock/revision are non-negative integers no larger than JavaScript's maximum safe integer. Explicit null is distinct from zero or a missing/corrupt key. Pending legacy data cannot coexist with active records in this schema.
+IDs are lowercase UUIDs generated natively. Zero and null remain distinct. Every required nullable key is serialized explicitly. Baseline and legacy stock are mutually exclusive; additions require a baseline, positive quantities, unique IDs and that baseline's ID. Addition timestamps cannot precede the baseline; equal timestamps are allowed because transactions serialize actions that occur within the same millisecond. A clock rollback before the baseline rejects an addition without writing.
 
-`MedicationRecord.prescriptionId` is the sole canonical relationship: one prescription may have many medications, each medication has zero or one prescription. It references the prescription record ID, not its changing document ID. Legacy prescription `medicationIds` is preserved without being read as a relationship or updated to mirror links. No bidirectional synchronization exists.
+No `stock` or `estimatedStock` balance is written in v2 records. The Health reference fields reserve the future consumption-source contract; Phase 1 creates null references and offers no mutation that establishes or changes a Health link. Concept encoding, native equality and enforcement of one inventory per actual Health concept belong to Phase 2 before linking can be enabled.
 
-Add/Edit offers radio-style single selection, including None / Unlinked. Newly selected links are checked against existing prescription records immediately before the medication mutation. Unchanged links can be preserved during a name edit if prescription storage is unavailable. No link is guessed during migration. Selection currently reads metadata only, never opens a document or invokes authentication.
+Baseline identity is independent of medication identity. A future Health link must match the baseline's consumption source. Removing or changing a link cannot turn a previous gross baseline into current manual stock: calculation returns confirmation-required on a source mismatch. Phase 2 must atomically establish a new physical baseline when changing consumption sources and enforce one inventory per concept.
 
-Prescription deletion first durably unlinks every matching medication, preserving IDs, names, stock, other links and already-unlinked records. The wallet calls `createPrescriptionDeletionCoordinator`, which supplies a preparation callback to the prescription service. That callback runs inside the prescription operation lock, after explicit confirmation and before removal. It calls Medication service `unlinkPrescription`, which reads the latest revision and sends one bulk command through `MedicationStore` to native storage. Prescription persistence never directly mutates medication persistence; legacy prescription `medicationIds` stays untouched.
+## Migration
 
-Read, write, stale-revision or uncertain unlink failures stop prescription removal and produce an explicit notice. If unlink succeeds but prescription removal fails or loses its acknowledgement, the notice explains the partial result: medication links are cleared and stock is kept; the wallet reloads before retry. Retrying reads durable state and does not rewrite already-unlinked records. There is no compensating relink or guessed rollback. Empty collections and pending stock-only migration require no medication write. Document cleanup failure remains a separate cleanup-pending result.
+Native reads the collection first. A valid v1 envelope is upgraded in one serialized Keychain update with revision incremented once. IDs, names, prescription links and all exact existing stock values are preserved. Existing stock moves to `legacyRecordedStock`, with no invented count time, baseline, addition, Health link or threshold. Empty collections remain empty. Stock-only pending legacy records retain the same ID and integer quantity until the user supplies a name.
 
-These are ordered operations, not a cross-domain atomic transaction: interruption between them may leave a retained prescription with its medications unlinked. Selection checking and medication commits likewise are not a cross-domain transaction; the current foreground app has no simultaneous prescription editor/background writer. Introducing those writers would require coordinating link creation with deletion. Unresolved older saved IDs remain visible as unavailable details until explicitly unlinked.
+A missing collection alone permits singleton migration. The sources remain `com.personalos.medication-name` / `medication-name` and `com.personalos.medication-stock` / `estimated-stock`. Both recovery entries remain byte-for-byte untouched. Name-only becomes unrecorded stock; stock-only remains pending; neither source creates an empty v2 collection. Invalid or inaccessible sources never become empty data.
 
-## Legacy migration
+Failed writes preserve previous committed bytes. Baseline creation clears legacy stock and superseded additions only as part of the complete replacement snapshot. There is no preliminary clearing write. After successful publication with failed verification, `commit-uncertain` requires read-back; the UI must inspect the committed snapshot rather than replay an additive command. Interrupted migration reads either intact v1 or complete v2. V2 is never re-imported from singleton recovery entries. Unsupported/corrupt versions fail closed. Revision exhaustion rejects migration/mutation rather than wrapping. Downgrade after v2 publication is unsupported.
 
-The only sources are the actual saved entries:
+## Manual commands and quantities
 
-| Service                           | Account           | Value                               |
-| --------------------------------- | ----------------- | ----------------------------------- |
-| `com.personalos.medication-name`  | `medication-name` | UTF-8 name                          |
-| `com.personalos.medication-stock` | `estimated-stock` | JSON `{ "estimatedStock": number }` |
+- `create`, `edit`, `completeLegacy`, `remove` retain their identity/relationship semantics.
+- `establishBaseline` implements Record/Correct Stock: native assigns a timestamp and fresh baseline ID, replaces the physical quantity, clears prior additions and clears legacy stock atomically.
+- `addStock` appends a baseline-scoped addition. For an untimestamped legacy total only, it updates that preserved manual total without fabricating a baseline. A record without any stock cannot accept an addition.
+- `setLowStockThreshold` stores the user's count or null to disable it. Zero and fractional thresholds are valid; no default is invented.
+- `unlinkPrescription` changes only `prescriptionId`, preserving every stock field and reserved Health reference. It never calls Health or modifies prescription storage itself.
 
-The old UI fallback “Medication A” is not source data. If that exact name was explicitly persisted, it is preserved like any other saved name.
+Quantities are finite nonnegative JavaScript numbers/Swift Doubles bounded by `Number.MAX_SAFE_INTEGER`; additions must be greater than zero. Revisions and pending singleton stock remain safe integers. Decimal point and decimal comma input are accepted, with no grouping or exponent notation. Boolean, negative, nonfinite and overflowing inputs reject. Additions that are too small to change a represented total reject. Input and output remain numbers/Doubles, but reconciliation sums their decimal representations before a single conversion back to number. This prevents ordinary decimal cancellation (0.3 − 0.1 − 0.2) from becoming a false deficit without rounding individual doses. Native legacy additions use Foundation decimal arithmetic and reject unsupported precision/range. User-entered decimals that change value when converted to number reject. Extreme precision is not promised and must not be interpreted as clinical precision.
 
-| Source                      | Result                                                           |
-| --------------------------- | ---------------------------------------------------------------- |
-| Name and stock              | One record with both actual values and null prescription link    |
-| Name only                   | One record with null stock/link                                  |
-| Stock only, including zero  | Durable pending record with stable ID, exact stock and null link |
-| Neither entry               | Empty collection                                                 |
-| Invalid or unreadable entry | Error; no initialization, replacement or deletion                |
+The only unit is count. The UI says units, supports decimal stock entry, and exposes optional threshold editing through the existing action menu and VoiceOver actions. A threshold is inclusive (`quantity <= threshold`). Its indicator describes recorded stock in manual mode. There is no days-remaining calculation, medical threshold, notification or adherence interface.
 
-Pending migration asks only for a name. Cancellation/restart retains pending stock and identity. Completing it moves the same ID/stock into one record with a null link; a later Edit can link it explicitly. Add and ordinary mutations remain blocked until completion.
+## Pure reconciliation
 
-Read the collection first. Only an explicitly missing item permits initialization. Insert the entire envelope once and read it back. Its existence is the migration marker, including an empty collection after deleting the last medication. Restarts after publication read the same IDs and do not reimport old data. An unsupported version or corrupt collection fails closed rather than restoring stale singleton values. Both legacy entries remain byte-for-byte untouched recovery copies and are no longer active stores. Downgrades to singleton builds are unsupported.
+`medicationHealth.ts` defines read-only reader, medication, event and complete-query snapshot contracts; there is no production reader. `medicationStock.ts` derives a result without mutating or persisting its inputs:
 
-## Persistence and failure handling
+```text
+baseline quantity + baseline-scoped additions - eligible taken quantities
+```
 
-`MedicationCollectionStorage.swift` owns schema validation, migration, ID generation and revision-checked commands. A shared lock serializes the complete read/check/write/verify transaction across store instances; the bridge dispatches work off the UI thread. This is a single-process contract; an extension/background process would require a separate concurrency design.
+A snapshot must match the baseline ID, concept reference, exact baseline start and a valid cutoff covering the included additions. Known limited coverage, obsolete results and missing Health data never become a current manual balance. All sample-query results must be collected before calling the calculation. A complete query describes query completion, not proof that Health has disclosed every event.
 
-`MedicationKeychain.swift` uses Security's `SecItemAdd` only for initial insertion and `SecItemUpdate` for existing collection writes. It never deletes an item to replace it and never upserts from a stale mutation. The installed react-native-keychain implementation deletes before inserting, so it is not used for collection persistence. Existing singleton TypeScript writers are removed. No dependencies were added.
+Eligible events have the exact concept, count units, a finite nonnegative quantity, taken status and occurrence time strictly after the baseline and at or before the cutoff. Event time means the logged dose's sample start time, not scheduled time or query arrival time. Duplicate sample IDs contribute once; conflicting duplicate payloads invalidate the snapshot. Distinct IDs are not collapsed based on matching quantities/times.
 
-The collection uses `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` with synchronization disabled. Keep signing identity, bundle identity and Keychain access configuration unchanged for in-place upgrade testing. Locked/inaccessible Keychain errors must not be interpreted as absence. Data does not migrate to a different device through backup restore under this existing protection policy.
+Skipped, notLogged, snoozed, notInteracted and notificationNotSent events contribute zero. Unknown statuses, incompatible units or invalid taken quantities make the result incomplete. There is no substitution of scheduled quantity and no mg/mL/strength-to-count conversion. Each fresh snapshot replaces the prior calculation, so edits, undo, deletion and backdated changes reconcile without incremental deduction drift.
 
-Each command carries the revision originally displayed to the user. Native rejects stale revisions, invalid IDs and invalid values before writing. Edits preserve ID/stock; stock changes preserve name/link; deletion removes only the selected record. Native reconstructs supported fields rather than accepting arbitrary collection replacements.
+A negative result requires physical confirmation and is not clamped or written back. An empty query carries `noReadableEvents: true`: it is not proof of no doses or permission. Threshold status is absent when stock cannot be calculated. A new correction establishes a new interval; older events cannot affect its balance.
 
-Read-back failure after publication returns `commit-uncertain`. The UI reloads after storage failures or uncertain responses, closes stale forms and asks the user to inspect the result before retrying. It never blindly replays an addition. Duplicate/cancelled callbacks and callbacks after unmount cannot start a mutation. Revision checking also protects against callbacks or writes from other screen instances.
+## Persistence, privacy and failures
 
-Errors contain no user data, credentials or raw native errors. There is no network, database, HealthKit permission or prescription write in this feature.
+The existing shared native lock, revision checking, `SecItemAdd` initialization, `SecItemUpdate` replacement and read-back verification remain. Keychain remains `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, nonsynchronizing. There are no raw Health events or estimates persisted in the app, no external processing, and no health content in error messages or logs. Native errors remain sanitized.
 
-## UI
-
-The screen shows Add medication and compact name/stock cards. Normal tap does not mutate. Long press and named VoiceOver actions expose Add stock (recorded) or Record current stock (unrecorded), Correct stock, Edit medication and Delete medication. Action sheets include Cancel. Correct stock on an unrecorded record opens initial stock recording, without inventing a previous zero balance. Deletion requires a separate explicit confirmation. Text wraps/scales and controls retain minimum touch targets.
+Prescription deletion still confirms first and unlinks medications before deleting the prescription. A failed unlink stops deletion; a subsequent prescription failure may leave the retained prescription unlinked. Retry reads durable state, never guesses a rollback. Deleting a medication never deletes its prescription or Health records.
 
 ## Validation
 
-See [Medication test audit](MEDICATION_TEST_AUDIT.md) for the earlier 268-to-237 count change and the final VPS validation results. Native compilation/tests, the iOS build and device checks below have not run in this Linux workspace, so full validation is not yet complete.
-
-TypeScript/Jest tests cover multiple medications, independent arithmetic, zero/null stock, invalid/overflow inputs, stable IDs, single relationship selection, None, link validation, legacy relationship non-use, unavailable prescriptions, stale snapshots, callback guards, uncertain writes, pending migration, deletion isolation, navigation persistence and native response validation.
-
-Standalone Swift tests exercise the actual collection implementation against an injected Keychain boundary: migration matrix, untouched source bytes, failed reads/writes, interrupted/lost publication, explicit null encoding, malformed records, revision rejection and concurrent operations. The Security smoke test uses a unique synthetic Keychain service and checks real insert/update/read/account isolation.
-
-From `app`:
+Run from `app/`:
 
 ```sh
 npm test -- --runInBand
@@ -94,7 +96,9 @@ npm test -- --runInBand
 npm run lint
 ```
 
-On a Mac, from the repository root:
+Run `git diff --check` from the repository root. Tests cover schema validation, fractional manual operations, source mismatch, full Health snapshot reconciliation, edits/deletions, timestamp boundaries, unavailable/limited data, thresholds and prescription field preservation.
+
+On Mac, run the actual native store and Keychain smoke tests:
 
 ```sh
 xcrun --sdk macosx swiftc app/ios/MedicationCollectionStorage.swift \
@@ -106,6 +110,6 @@ xcrun --sdk macosx swiftc app/ios/MedicationCollectionStorage.swift \
 /tmp/medication-keychain-tests
 ```
 
-The test sources are outside the application target. Swift/native tests and the rebuilt iOS app require Mac validation; the Linux workspace has no Swift compiler or Xcode. Mocked tests do not establish Security framework durability or iOS accessibility protection.
+Swift tests cover actual native migration, failed/uncertain publication, unchanged recovery bytes, v2 round trips, fractional baseline/additions/thresholds and correction scope. They cannot be compiled in this Linux workspace; Mac execution and the iOS build remain required. Also rerun prescription native tests.
 
-Before merge, validate an in-place iPhone upgrade without uninstalling/resetting data, with synthetic saved name/stock and stock-only cases. Check repeated launch, force-quit during writes, lock/unlock errors, offline operation, multiple records and links, deletion/cancellation, VoiceOver action parity and large Dynamic Type. Run the existing prescription native tests as a regression check. Do not log or copy real device medication data into this public repository.
+On iPhone, upgrade in place using synthetic v1/singleton data without reinstalling. Preserve signing identity and bundle identity. Check migration, repeated launches, force-quit around writes, lock/unlock, offline operation, decimal keyboards, threshold editing, VoiceOver and large Dynamic Type. The existing scheme's absent test-target reference is not repaired in Phase 1; use the standalone native commands above and build the application on Mac. Real Health authorization/reconciliation validation belongs to Phase 2.

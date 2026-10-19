@@ -133,3 +133,7 @@ Before marking the milestone complete:
 - Validate filesystem durability and recovery under interruption on the actual Apple filesystem. Linux/mock tests are not evidence of device-level durability or protection.
 
 A pending legacy item requires user-supplied metadata to become a valid collection record. Corrupt or missing stored documents are not guessed/reconstructed. Downgrading to an old single-current build is unsupported once version 2 has been written; retain the upgraded app when testing migration.
+
+## Medication v2 compatibility
+
+Medication now retains count baselines, baseline-scoped additions, legacy stock, optional thresholds and reserved Health identity fields in its own v2 store. Prescription deletion clears only `MedicationRecord.prescriptionId`; all these fields are preserved. No Health authorization, query or write is introduced into the wallet. See [Medication Phase 1](MEDICATION.md).

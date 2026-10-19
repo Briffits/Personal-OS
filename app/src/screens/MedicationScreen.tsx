@@ -1,3 +1,4 @@
+import { recordedQuantity } from '../medications/medicationStock';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
@@ -117,7 +118,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
               ? 'Invalid amount'
               : 'Prescription unavailable',
             code === 'invalid-input'
-              ? 'Enter a whole number of zero or more. Add stock requires a number greater than zero within the supported range.'
+              ? 'Enter a count of zero or more, including fractions. Add stock requires a number greater than zero within the supported range.'
               : 'This prescription is no longer available. Choose another prescription or None / Unlinked.',
           );
         } else {
@@ -192,8 +193,43 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
       );
       return;
     }
+    if (action === 'threshold') {
+      Alert.prompt(
+        'Set low-stock threshold',
+        'Show low stock at or below this count. Leave blank to turn off.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              consume();
+            },
+          },
+          {
+            text: 'Save',
+            onPress: value => {
+              if (consume()) {
+                return run(() =>
+                  service.setLowStockThreshold(
+                    snapshot,
+                    record.id,
+                    value ?? '',
+                  ),
+                );
+              }
+            },
+          },
+        ],
+        'plain-text',
+        record.lowStockThreshold?.toString() ?? '',
+        'decimal-pad',
+      );
+      return;
+    }
     const stockAction =
-      action === 'correct' && record.stock === null ? 'record' : action;
+      action === 'correct' && recordedQuantity(record) === null
+        ? 'record'
+        : action;
     const title =
       stockAction === 'add'
         ? 'Add stock'
@@ -203,8 +239,8 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
     Alert.prompt(
       title,
       stockAction === 'add'
-        ? 'Enter the number of tablets to add.'
-        : 'Enter the number of tablets you physically have. This becomes the recorded total.',
+        ? 'Enter the number of units to add.'
+        : 'Enter the number of units you physically have. This replaces the recorded total with a new physical stock baseline.',
       [
         {
           text: 'Cancel',
@@ -236,7 +272,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
       ],
       'plain-text',
       '',
-      'number-pad',
+      'decimal-pad',
     );
   }
 
@@ -365,7 +401,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
           <AppCard variant="attention" style={styles.card}>
             <Text style={text}>Saved medication — name needed</Text>
             <Text style={text}>
-              Recorded stock: {state.pendingLegacy.stock} tablets
+              Recorded stock: {state.pendingLegacy.stock} units
             </Text>
             <Text style={text}>
               Enter a name to finish keeping this medication. Your saved stock

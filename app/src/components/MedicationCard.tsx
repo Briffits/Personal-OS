@@ -1,3 +1,7 @@
+import {
+  calculateStock,
+  recordedQuantity,
+} from '../medications/medicationStock';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import AppCard from '../design-system/components/AppCard';
 import {
@@ -8,15 +12,22 @@ import {
 } from '../design-system';
 import type { MedicationRecord } from '../medications/medication';
 
-export type MedicationAction = 'add' | 'record' | 'correct' | 'edit' | 'delete';
+export type MedicationAction =
+  | 'add'
+  | 'record'
+  | 'correct'
+  | 'edit'
+  | 'delete'
+  | 'threshold';
 export function medicationActions(record: MedicationRecord) {
   return [
-    record.stock === null
+    recordedQuantity(record) === null
       ? { name: 'record' as const, label: 'Record current stock' }
       : { name: 'add' as const, label: 'Add stock' },
     { name: 'correct' as const, label: 'Correct stock' },
     { name: 'edit' as const, label: 'Edit medication' },
     { name: 'delete' as const, label: 'Delete medication' },
+    { name: 'threshold' as const, label: 'Set low-stock threshold' },
   ];
 }
 
@@ -32,10 +43,15 @@ export default function MedicationCard({
   onLongPress: () => void;
 }) {
   const theme = usePersonalOSTheme();
+  const stock = calculateStock(record);
   const description =
-    record.stock === null
+    'quantity' in stock
+      ? `Recorded stock: ${stock.quantity.toLocaleString(undefined, {
+          maximumSignificantDigits: 17,
+        })} units${stock.low ? ' · Low stock' : ''}`
+      : stock.status === 'unrecorded'
       ? 'Stock not recorded'
-      : `Recorded stock: ${record.stock} tablets`;
+      : 'Confirm current stock';
   const actions = disabled ? [] : medicationActions(record);
   return (
     <AppCard style={styles.card}>
