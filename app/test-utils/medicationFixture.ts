@@ -116,6 +116,9 @@ export function medicationFixture(initial = initialCollection()) {
               },
             };
           }
+          if (command.type !== 'addStock') {
+            throw new MedicationError('unsupported-test-command');
+          }
           if (!record.stockBaseline) {
             return {
               ...record,

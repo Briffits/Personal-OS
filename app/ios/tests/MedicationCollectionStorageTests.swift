@@ -51,7 +51,9 @@ private final class FakeKeychain: MedicationKeychainAccess {
   }
 }
 
+#if !NATIVE_XCTEST
 @main
+#endif
 struct MedicationCollectionStorageTests {
   static func main() throws {
     let tests: [(String, () throws -> Void)] = [

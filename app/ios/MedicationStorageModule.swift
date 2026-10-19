@@ -3,7 +3,8 @@ import React
 
 @objc(MedicationStorage)
 final class MedicationStorageModule: NSObject {
-  private let storage = MedicationCollectionStorage(keychain: MedicationKeychain())
+  private let storage = MedicationCollectionStorage(keychain: MedicationKeychain(),
+    validateConcept: HealthMedicationIdentity.validate, sameConcept: HealthMedicationIdentity.equal)
   private let queue = DispatchQueue(label: "com.personalos.medication-storage")
 
   @objc static func requiresMainQueueSetup() -> Bool { false }
@@ -13,7 +14,9 @@ final class MedicationStorageModule: NSObject {
                        operation: @escaping () throws -> MedicationCollection) {
     queue.async {
       do { resolve(try operation().payload) }
-      catch let error as MedicationStorageError {
+      catch let error as MedicationHealthError {
+        reject(error.rawValue, "The Health medication reference could not be used.", nil)
+      } catch let error as MedicationStorageError {
         reject(error.rawValue, "The medication operation could not be completed.", nil)
       } catch {
         reject("operation-failed", "The medication operation could not be completed.", nil)

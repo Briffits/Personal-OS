@@ -20,6 +20,17 @@
 		9BBD398B306933C30016AF90 /* PrescriptionDocumentsBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 9BBD3989306933C30016AF90 /* PrescriptionDocumentsBridge.m */; };
 		9BBD398D306957440016AF90 /* PrescriptionDocumentStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBD398C306957440016AF90 /* PrescriptionDocumentStorage.swift */; };
 		B37EFCDED851F7DDCD8B1E61 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		AAD2000000000000000000C8 = {isa = PBXBuildFile; fileRef = AAD200000000000000000064; };
+		AAD2000000000000000000C9 = {isa = PBXBuildFile; fileRef = AAD200000000000000000065; };
+		AAD2000000000000000000CA = {isa = PBXBuildFile; fileRef = AAD200000000000000000066; };
+		AAD2000000000000000000CB = {isa = PBXBuildFile; fileRef = AAD200000000000000000067; };
+		AAD2000000000000000000CC = {isa = PBXBuildFile; fileRef = AAD200000000000000000068; };
+		AAD200000000000000000190 = {isa = PBXBuildFile; fileRef = AACC00000000000000000011; };
+		AAD200000000000000000191 = {isa = PBXBuildFile; fileRef = AAD200000000000000000064; };
+		AAD200000000000000000192 = {isa = PBXBuildFile; fileRef = AAD200000000000000000065; };
+		AAD200000000000000000193 = {isa = PBXBuildFile; fileRef = AAD200000000000000000066; };
+		AAD200000000000000000194 = {isa = PBXBuildFile; fileRef = AAD200000000000000000069; };
+		AAD200000000000000000195 = {isa = PBXBuildFile; fileRef = AAD20000000000000000006A; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +52,15 @@
 		9BBD3989306933C30016AF90 /* PrescriptionDocumentsBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PrescriptionDocumentsBridge.m; sourceTree = "<group>"; };
 		9BBD398C306957440016AF90 /* PrescriptionDocumentStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrescriptionDocumentStorage.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		AAD200000000000000000064 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMedicationIdentity.swift; sourceTree = "<group>"; };
+		AAD200000000000000000065 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationHealthMapping.swift; sourceTree = "<group>"; };
+		AAD200000000000000000066 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationHealthReader.swift; sourceTree = "<group>"; };
+		AAD200000000000000000067 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationHealthModule.swift; sourceTree = "<group>"; };
+		AAD200000000000000000068 = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MedicationHealthBridge.m; sourceTree = "<group>"; };
+		AAD200000000000000000069 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tests/MedicationCollectionStorageTests.swift; sourceTree = "<group>"; };
+		AAD20000000000000000006A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tests/MedicationHealthTests.swift; sourceTree = "<group>"; };
+		AAD20000000000000000006B = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalOS/PersonalOS.entitlements; sourceTree = "<group>"; };
+		AAD20000000000000000012C = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PersonalOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,6 +72,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AAD20000000000000000012E = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -87,6 +108,14 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				AAD20000000000000000006B,
+				AAD20000000000000000006A,
+				AAD200000000000000000069,
+				AAD200000000000000000068,
+				AAD200000000000000000067,
+				AAD200000000000000000066,
+				AAD200000000000000000065,
+				AAD200000000000000000064,
 				9BBD398C306957440016AF90 /* PrescriptionDocumentStorage.swift */,
 				AACC00000000000000000011 /* MedicationCollectionStorage.swift */,
 				AACC00000000000000000012 /* MedicationKeychain.swift */,
@@ -109,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* PersonalOS.app */,
+				AAD20000000000000000012C,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -146,8 +176,15 @@
 			productReference = 13B07F961A680F5B00A75B9A /* PersonalOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		00E356ED1AD99517003FC87E = {isa = PBXNativeTarget; buildConfigurationList = AAD20000000000000000012F; buildPhases = (AAD20000000000000000012D, AAD20000000000000000012E,); buildRules = (); dependencies = (AAD200000000000000000130,); name = PersonalOSTests; productName = PersonalOSTests; productReference = AAD20000000000000000012C; productType = "com.apple.product-type.bundle.unit-test"; };
 /* End PBXNativeTarget section */
 
+/* Begin PBXContainerItemProxy section */
+        AAD200000000000000000131 = {isa = PBXContainerItemProxy; containerPortal = 83CBB9F71A601CBA00E9B192; proxyType = 1; remoteGlobalIDString = 13B07F861A680F5B00A75B9A; remoteInfo = PersonalOS; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+        AAD200000000000000000130 = {isa = PBXTargetDependency; target = 13B07F861A680F5B00A75B9A; targetProxy = AAD200000000000000000131; };
+/* End PBXTargetDependency section */
 /* Begin PBXProject section */
 		83CBB9F71A601CBA00E9B192 /* Project object */ = {
 			isa = PBXProject;
@@ -157,6 +194,7 @@
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1120;
+						SystemCapabilities = { com.apple.HealthKit = { enabled = 1; }; };
 					};
 				};
 			};
@@ -173,6 +211,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				00E356ED1AD99517003FC87E,
 				13B07F861A680F5B00A75B9A /* PersonalOS */,
 			);
 		};
@@ -279,6 +318,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AAD2000000000000000000CC,
+				AAD2000000000000000000CB,
+				AAD2000000000000000000CA,
+				AAD2000000000000000000C9,
+				AAD2000000000000000000C8,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				9B983C08306267AB00B0891C /* SceneDelegate.swift in Sources */,
 				9BBD398D306957440016AF90 /* PrescriptionDocumentStorage.swift in Sources */,
@@ -291,6 +335,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AAD20000000000000000012D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AAD200000000000000000190, AAD200000000000000000191, AAD200000000000000000192, AAD200000000000000000193, AAD200000000000000000194, AAD200000000000000000195,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -303,6 +348,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = PersonalOS/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = PersonalOS/PersonalOS.entitlements;
 				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -332,6 +378,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = PersonalOS/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = PersonalOS/PersonalOS.entitlements;
 				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -513,6 +560,32 @@
 			};
 			name = Release;
 		};
+        AAD2000000000000000001F4 = {isa = XCBuildConfiguration; buildSettings = {
+            BUNDLE_LOADER = "$(TEST_HOST)";
+            TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PersonalOS.app/PersonalOS";
+            GENERATE_INFOPLIST_FILE = YES;
+            PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.PersonalOSTests";
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SWIFT_VERSION = 5.0;
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) NATIVE_XCTEST";
+            IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+            SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+            TARGETED_DEVICE_FAMILY = "1,2";
+            LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+        }; name = Debug; };
+        AAD2000000000000000001F5 = {isa = XCBuildConfiguration; buildSettings = {
+            BUNDLE_LOADER = "$(TEST_HOST)";
+            TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PersonalOS.app/PersonalOS";
+            GENERATE_INFOPLIST_FILE = YES;
+            PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.PersonalOSTests";
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SWIFT_VERSION = 5.0;
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) NATIVE_XCTEST";
+            IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
+            SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+            TARGETED_DEVICE_FAMILY = "1,2";
+            LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+        }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -534,6 +607,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+        AAD20000000000000000012F = {isa = XCConfigurationList; buildConfigurations = (AAD2000000000000000001F4, AAD2000000000000000001F5,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 83CBB9F71A601CBA00E9B192 /* Project object */;

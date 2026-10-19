@@ -2,6 +2,7 @@ import { recordedQuantity } from './medicationStock';
 import {
   MedicationError,
   isIdentifier,
+  isConceptReference,
   isStock,
   parseStockInput,
   validateDetails,
@@ -17,6 +18,13 @@ export type MedicationCommand =
   | { type: 'addStock'; id: string; quantity: number }
   | { type: 'setLowStockThreshold'; id: string; quantity: number | null }
   | { type: 'unlinkPrescription'; prescriptionId: string }
+  | {
+      type: 'linkHealth';
+      id: string;
+      conceptReference: string;
+      quantity: number;
+    }
+  | { type: 'unlinkHealth'; id: string }
   | { type: 'remove'; id: string };
 
 export interface MedicationStore {
@@ -127,6 +135,29 @@ export function createMedicationService(
         id,
         quantity,
       });
+    },
+    // Caller supplies an explicitly confirmed physical count. Native validates
+    // identity and enforces semantic uniqueness inside the revision transaction.
+    linkHealth(
+      state: MedicationCollection,
+      id: string,
+      conceptReference: string,
+      physicalCount: string,
+    ) {
+      find(state, id);
+      if (!isConceptReference(conceptReference)) {
+        throw new MedicationError('invalid-input');
+      }
+      return store.mutate(state.revision, {
+        type: 'linkHealth',
+        id,
+        conceptReference,
+        quantity: parseStockInput(physicalCount),
+      });
+    },
+    unlinkHealth(state: MedicationCollection, id: string) {
+      find(state, id);
+      return store.mutate(state.revision, { type: 'unlinkHealth', id });
     },
     // The caller must obtain explicit deletion confirmation for this snapshot.
     remove(state: MedicationCollection, id: string) {

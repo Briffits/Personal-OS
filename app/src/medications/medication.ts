@@ -22,7 +22,7 @@ export type MedicationRecord = {
   readonly stockAdditions: readonly StockAddition[];
   readonly legacyRecordedStock: number | null;
   readonly lowStockThreshold: number | null;
-  // Reserved contract only in Phase 1. No Health linking mutation exists yet.
+  // Opaque native-validated concept identity; descriptive Health data is not stored.
   readonly healthKitLink: { readonly conceptReference: string } | null;
 };
 export type MedicationDetails = Pick<

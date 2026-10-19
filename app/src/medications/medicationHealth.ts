@@ -1,8 +1,11 @@
-// Read-only contracts. Phase 1 has no native implementation or authorization UI.
+// Read-only contracts. Phase 2 provides the native reader; UI is deferred.
 export type HealthMedication = {
   readonly conceptReference: string;
   readonly displayName: string;
-  readonly archived: boolean;
+  readonly isArchived: boolean;
+  readonly nickname: string | null;
+  readonly form: string | null;
+  readonly hasSchedule: boolean;
 };
 export type MedicationDoseEvent = {
   readonly id: string;

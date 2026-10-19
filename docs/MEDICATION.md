@@ -1,4 +1,6 @@
-# Medication — Phase 1 of Medication 1.0
+# Medication — Medication 1.0
+
+Phase 2 native access and linking are now implemented in source, with Mac compilation and native validation pending. See [Phase 2 APIs, identity, linking, configuration and validation](MEDICATION_PHASE_2.md). The sections below describe the completed Phase 1 baseline; historical statements that Health integration is absent apply to Phase 1 only. No Phase 3 UI is implemented.
 
 Medication owns physical stock, adjustments and the canonical optional `prescriptionId`. Prescription Wallet remains a separate document domain. Apple Health owns schedules, reminders and dose logging.
 

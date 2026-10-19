@@ -10,6 +10,9 @@ enum MedicationStorageError: String, Error {
   case migrationRequired = "migration-required"
   case notFound = "not-found"
   case commitUncertain = "commit-uncertain"
+  case duplicateHealthLink = "duplicate-health-link"
+  case baselineRequired = "baseline-required"
+  case healthUnavailable = "health-unavailable"
 }
 
 // Keychain is the only production implementation. Tests inject failures at the
@@ -47,7 +50,7 @@ struct MedicationRecord: Equatable {
   var stockAdditions: [StockAddition] = []
   var legacyRecordedStock: Double? = nil
   var lowStockThreshold: Double? = nil
-  // Opaque identity only; Phase 1 exposes no Health-link mutation.
+  // Opaque identity only; no descriptive Health metadata is persisted.
   var healthKitConceptReference: String? = nil
 
   var payload: [String: Any] {
@@ -97,13 +100,19 @@ final class MedicationCollectionStorage {
   private let keychain: MedicationKeychainAccess
   private let makeID: () -> String
   private let now: () -> Date
+  private let validateConcept: (String) throws -> Void
+  private let sameConcept: (String, String) throws -> Bool
 
   init(keychain: MedicationKeychainAccess,
        makeID: @escaping () -> String = { UUID().uuidString.lowercased() },
-       now: @escaping () -> Date = Date.init) {
+       now: @escaping () -> Date = Date.init,
+       validateConcept: @escaping (String) throws -> Void = { _ in throw MedicationStorageError.healthUnavailable },
+       sameConcept: @escaping (String, String) throws -> Bool = { _, _ in throw MedicationStorageError.healthUnavailable }) {
     self.keychain = keychain
     self.makeID = makeID
     self.now = now
+    self.validateConcept = validateConcept
+    self.sameConcept = sameConcept
   }
 
   private func serialized<T>(_ operation: () throws -> T) rethrows -> T {
@@ -343,12 +352,46 @@ final class MedicationCollectionStorage {
             displayName: try Self.name(command["displayName"]).trimmingCharacters(in: .whitespacesAndNewlines),
             prescriptionId: nil, legacyRecordedStock: Double(pending.stock))]
           state.pendingLegacy = nil
-        case "edit", "establishBaseline", "addStock", "setLowStockThreshold", "remove":
+        case "edit", "establishBaseline", "addStock", "setLowStockThreshold", "remove", "linkHealth", "unlinkHealth":
           let id = try Self.identifier(command["id"])
           guard let index = state.records.firstIndex(where: { $0.id == id }) else {
             throw MedicationStorageError.notFound
           }
-          if type == "edit" {
+          if type == "linkHealth" {
+            let reference = try Self.name(command["conceptReference"])
+            try validateConcept(reference)
+            for other in state.records where other.id != id {
+              if let existing = other.healthKitConceptReference, try sameConcept(existing, reference) {
+                throw MedicationStorageError.duplicateHealthLink
+              }
+            }
+            // Preserve the stored token for an unchanged semantic identity. JS
+            // provenance checks can then use that token without archive equality.
+            if let existing = state.records[index].healthKitConceptReference, try sameConcept(existing, reference) {
+              return state
+            }
+            guard command["quantity"] != nil, !(command["quantity"] is NSNull) else {
+              throw MedicationStorageError.baselineRequired
+            }
+            let record = state.records[index]
+            let baseline = StockBaseline(id: try Self.identifier(makeID()), quantity: try Self.quantity(command["quantity"]),
+              recordedAt: try Self.instant(Self.formatter().string(from: now())), healthKitConceptReference: reference)
+            guard baseline.id != record.stockBaseline?.id, !record.stockAdditions.contains(where: { $0.id == baseline.id }) else {
+              throw MedicationStorageError.invalidInput
+            }
+            state.records[index].healthKitConceptReference = reference
+            state.records[index].stockBaseline = baseline
+            state.records[index].stockAdditions = []
+            state.records[index].legacyRecordedStock = nil
+          } else if type == "unlinkHealth" {
+            guard state.records[index].healthKitConceptReference != nil else { return state }
+            state.records[index].healthKitConceptReference = nil
+            // Retain the old baseline/source as confirmation-required. Do not
+            // decode it: unlink must work without Health access or on older OSes.
+            // Defensive clearing prevents a malformed legacy+link combination
+            // from reviving an undeducted manual total after unlink.
+            state.records[index].legacyRecordedStock = nil
+          } else if type == "edit" {
             state.records[index].displayName = try Self.name(command["displayName"]).trimmingCharacters(in: .whitespacesAndNewlines)
             state.records[index].prescriptionId = try Self.prescription(command["prescriptionId"])
           } else if type == "setLowStockThreshold" {
@@ -371,7 +414,11 @@ final class MedicationCollectionStorage {
             guard amount > 0 else { throw MedicationStorageError.invalidInput }
             let record = state.records[index]
             if let baseline = record.stockBaseline {
-              guard baseline.healthKitConceptReference == record.healthKitConceptReference else {
+              let sourceMatches: Bool
+              if let baselineSource = baseline.healthKitConceptReference, let source = record.healthKitConceptReference {
+                sourceMatches = try sameConcept(baselineSource, source)
+              } else { sourceMatches = baseline.healthKitConceptReference == nil && record.healthKitConceptReference == nil }
+              guard sourceMatches else {
                 throw MedicationStorageError.invalidInput
               }
               let total = record.stockAdditions.reduce(baseline.quantity) { $0 + $1.quantity }
