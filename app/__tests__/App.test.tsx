@@ -1,3 +1,5 @@
+import * as ReactNative from 'react-native';
+import AppCard from '../src/design-system/components/AppCard';
 import React from 'react';
 import { Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
@@ -177,3 +179,28 @@ test('prescription deletion never deletes medications or their stock', async () 
   expect(fixture.state().records[0].stock).toBe(12);
   expect(fixture.state().records[0].prescriptionId).toBeNull();
 });
+
+test.each(['light', 'dark'] as const)(
+  'status bar and priority cards follow %s appearance without changing destinations',
+  async scheme => {
+    jest.spyOn(ReactNative, 'useColorScheme').mockReturnValue(scheme);
+    await act(async () => screen.update(<App />));
+    expect(screen.root.findByType(ReactNative.StatusBar).props.barStyle).toBe(
+      scheme === 'dark' ? 'light-content' : 'dark-content',
+    );
+    for (const tab of ['Today', 'Ask', 'Capture']) {
+      await press(tab + ' tab');
+      const cards = screen.root.findAllByType(AppCard);
+      expect(cards).toHaveLength(3);
+      expect(cards.every(node => node.props.variant === 'attention')).toBe(
+        true,
+      );
+    }
+    await press('Library tab');
+    expect(
+      screen.root
+        .findAllByType(AppCard)
+        .every(node => node.props.variant !== 'attention'),
+    ).toBe(true);
+  },
+);

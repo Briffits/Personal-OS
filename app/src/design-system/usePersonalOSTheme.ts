@@ -1,10 +1,6 @@
-import {useColorScheme} from 'react-native';
-
-import {darkTheme} from './themes/dark';
-import {lightTheme} from './themes/light';
+import { useColorScheme } from 'react-native';
+import { createTheme } from './theme/createTheme';
 
 export function usePersonalOSTheme() {
-  const colourScheme = useColorScheme();
-
-  return colourScheme === 'dark' ? darkTheme : lightTheme;
+  return createTheme(useColorScheme());
 }

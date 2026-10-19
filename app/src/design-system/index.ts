@@ -1,7 +1,9 @@
-export {palette, lightColours, darkColours} from './tokens/colours';
-export {spacing} from './tokens/spacing';
-export {typography} from './tokens/typography';
-export {layout} from './tokens/layout';
+export { radius } from './tokens/radius';
+export { createTheme } from './theme/createTheme';
+export type { PersonalOSTheme, CardVariant } from './theme/types';
+export { spacing } from './tokens/spacing';
+export { typography } from './tokens/typography';
+export { layout } from './tokens/layout';
 
 export {
   PHI,
@@ -12,9 +14,6 @@ export {
   goldenControlHeight,
 } from './geometry/goldenRatio';
 
-export type {GoldenButtonWidth} from './geometry/goldenRatio';
+export type { GoldenButtonWidth } from './geometry/goldenRatio';
 
-export {lightTheme} from './themes/light';
-export {darkTheme} from './themes/dark';
-
-export {usePersonalOSTheme} from './usePersonalOSTheme';
+export { usePersonalOSTheme } from './usePersonalOSTheme';

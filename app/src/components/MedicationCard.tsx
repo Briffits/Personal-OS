@@ -63,7 +63,12 @@ export default function MedicationCard({
         >
           {record.displayName}
         </Text>
-        <Text style={[typography.body, { color: theme.colours.textSecondary }]}>
+        <Text
+          style={[
+            typography.body,
+            { color: theme.colours.textSecondaryOnSurface },
+          ]}
+        >
           {description}
         </Text>
       </Pressable>

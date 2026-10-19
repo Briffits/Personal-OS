@@ -1,3 +1,5 @@
+import { radius } from '../tokens/radius';
+
 /**
  * Personal OS Golden Geometry
  *
@@ -36,7 +38,11 @@ export function goldenScreenPadding(screenWidth: number) {
 export function goldenRadius(width: number, height: number) {
   const shortestSide = Math.min(width, height);
 
-  return clamp(shortestSide / PHI_FOURTH, 6, 24);
+  return clamp(
+    shortestSide / PHI_FOURTH,
+    radius.cardMinimum,
+    radius.cardMaximum,
+  );
 }
 
 /**

@@ -1,3 +1,4 @@
+import AppCard from '../src/design-system/components/AppCard';
 import React from 'react';
 import { ActionSheetIOS, Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
@@ -311,6 +312,11 @@ test('pending legacy preserves stock, requires a name, and completes unlinked wi
   });
   await render();
   expect(button('Add medication').props.disabled).toBe(true);
+  expect(
+    screen.root
+      .findAllByType(AppCard)
+      .filter(node => node.props.variant === 'attention'),
+  ).toHaveLength(1);
   await press('Complete medication details');
   await press('Cancel medication details');
   expect(fixture.mutate).not.toHaveBeenCalled();
@@ -695,4 +701,11 @@ test('unmounted medication form cannot start a rename', async () => {
   await act(async () => screen.unmount());
   await act(async () => save({ displayName: 'Stale', prescriptionId: null }));
   expect(fixture.mutate).not.toHaveBeenCalled();
+});
+
+test('ordinary medication cards remain informational regardless of recorded stock', async () => {
+  await render();
+  const cards = screen.root.findAllByType(AppCard);
+  expect(cards).toHaveLength(2);
+  expect(cards.every(node => node.props.variant !== 'attention')).toBe(true);
 });

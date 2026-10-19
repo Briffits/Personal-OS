@@ -92,7 +92,7 @@ function WalletAction({
       onPress={onPress}
       style={styles.action}
     >
-      <Text style={[typography.bodyStrong, { color: theme.colours.primary }]}>
+      <Text style={[typography.bodyStrong, { color: theme.colours.action }]}>
         {label}
       </Text>
     </Pressable>
@@ -299,7 +299,7 @@ export default function PrescriptionWalletScreen({
           Prescriptions
         </Text>
         {loadFailed && (
-          <AppCard style={styles.card}>
+          <AppCard variant="attention" style={styles.card}>
             <Text style={textStyle}>
               Prescriptions could not be loaded. Your saved documents have not
               been removed.
@@ -320,7 +320,7 @@ export default function PrescriptionWalletScreen({
           </Text>
         )}
         {wallet && wallet.pendingCleanup.length > 0 && (
-          <AppCard style={styles.card}>
+          <AppCard variant="attention" style={styles.card}>
             <Text style={textStyle}>
               A saved change needs document cleanup. You can still view retained
               prescriptions.
@@ -351,7 +351,7 @@ export default function PrescriptionWalletScreen({
           />
         )}
         {wallet?.legacyDocumentId && (
-          <AppCard style={styles.card}>
+          <AppCard variant="attention" style={styles.card}>
             <Text
               style={[
                 typography.cardTitle,

@@ -78,7 +78,7 @@ export default function MedicationForm({
         onPress={action}
         style={styles.action}
       >
-        <Text style={[typography.bodyStrong, { color: theme.colours.primary }]}>
+        <Text style={[typography.bodyStrong, { color: theme.colours.action }]}>
           {label}
         </Text>
       </Pressable>
@@ -117,7 +117,7 @@ export default function MedicationForm({
           typography.body,
           styles.input,
           text,
-          { borderColor: theme.colours.textSecondary },
+          { borderColor: theme.colours.borderControl },
         ]}
       />
       {!migration && (

@@ -68,7 +68,12 @@ export default function PrescriptionMetadataForm({
 
   return (
     <View style={styles.form}>
-      <Text style={[typography.body, { color: theme.colours.textSecondary }]}>
+      <Text
+        style={[
+          typography.body,
+          { color: theme.colours.textSecondaryOnSurface },
+        ]}
+      >
         Choose a name to help you identify this prescription. Enter the dates
         shown on it using YYYY-MM-DD.
       </Text>
@@ -87,7 +92,7 @@ export default function PrescriptionMetadataForm({
           styles.input,
           {
             color: theme.colours.textPrimary,
-            borderColor: theme.colours.textSecondary,
+            borderColor: theme.colours.borderControl,
           },
         ]}
       />
@@ -108,7 +113,7 @@ export default function PrescriptionMetadataForm({
             style={styles.action}
           >
             <Text
-              style={[typography.bodyStrong, { color: theme.colours.primary }]}
+              style={[typography.bodyStrong, { color: theme.colours.action }]}
             >
               {kind === value ? '✓ ' : ''}
               {value === 'standard' ? 'Standard' : 'Temporary'}
@@ -152,7 +157,7 @@ export default function PrescriptionMetadataForm({
             onChangeText={field.update}
             editable={!busy}
             placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.colours.textSecondary}
+            placeholderTextColor={theme.colours.textSecondaryOnSurface}
             autoCorrect={false}
             autoCapitalize="none"
             keyboardType="numbers-and-punctuation"
@@ -161,7 +166,7 @@ export default function PrescriptionMetadataForm({
               styles.input,
               {
                 color: theme.colours.textPrimary,
-                borderColor: theme.colours.textSecondary,
+                borderColor: theme.colours.borderControl,
               },
             ]}
           />
@@ -183,7 +188,7 @@ export default function PrescriptionMetadataForm({
         onPress={save}
         style={styles.action}
       >
-        <Text style={[typography.bodyStrong, { color: theme.colours.primary }]}>
+        <Text style={[typography.bodyStrong, { color: theme.colours.action }]}>
           Save details
         </Text>
       </Pressable>
@@ -195,7 +200,7 @@ export default function PrescriptionMetadataForm({
         onPress={onCancel}
         style={styles.action}
       >
-        <Text style={[typography.bodyStrong, { color: theme.colours.primary }]}>
+        <Text style={[typography.bodyStrong, { color: theme.colours.action }]}>
           Cancel
         </Text>
       </Pressable>
