@@ -19,5 +19,5 @@ export const legacyDark = {
   surface: '#1C2023',
   textPrimary: '#F5F7F8',
   textSecondary: '#B8BEC3',
-  action: '#245C6A',
+  action: '#8EB5AE',
 } as const;
