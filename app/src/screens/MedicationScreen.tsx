@@ -29,6 +29,10 @@ import {
   type MedicationDetails,
 } from '../medications/medication';
 import { medicationService as service } from '../medications/currentMedicationService';
+import {
+  MedicationHealthError,
+  NativeMedicationHealth,
+} from '../native/NativeMedicationHealth';
 type Editor =
   | { mode: 'add' | 'migrate'; snapshot: MedicationCollection }
   | { mode: 'edit'; record: MedicationRecord; snapshot: MedicationCollection };
@@ -40,6 +44,8 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(true);
   const [failed, setFailed] = useState(false);
   const [notice, setNotice] = useState('');
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [healthNotice, setHealthNotice] = useState('');
   const [editor, setEditor] = useState<Editor | null>(null);
   const stateRef = useRef(state);
   const busyRef = useRef(true);
@@ -91,6 +97,46 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
       editorRef.current === null &&
       stateRef.current !== null
     );
+  }
+  async function requestHealthAccess() {
+    if (
+      !mounted.current ||
+      busyRef.current ||
+      interaction.current ||
+      editorRef.current
+    ) {
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    setHealthBusy(true);
+    setHealthNotice('');
+    try {
+      // Authorisation only: never query Health or reload/mutate inventory here.
+      await NativeMedicationHealth.requestMedicationAccess();
+      if (mounted.current) {
+        setHealthNotice(
+          'Access request finished. Access has not been checked.',
+        );
+      }
+    } catch (error) {
+      if (mounted.current) {
+        const code = error instanceof MedicationHealthError ? error.code : '';
+        setHealthNotice(
+          code === 'authorization-cancelled'
+            ? 'Access request cancelled. You can try again whenever you’re ready.'
+            : code === 'health-unavailable'
+            ? 'Apple Health medication access is unavailable on this device. You can continue managing medications manually.'
+            : 'The Apple Health access request could not be completed. Please try again.',
+        );
+      }
+    } finally {
+      busyRef.current = false;
+      if (mounted.current) {
+        setBusy(false);
+        setHealthBusy(false);
+      }
+    }
   }
   async function run(operation: () => Promise<MedicationCollection>) {
     if (!mounted.current || busyRef.current) {
@@ -473,6 +519,41 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
           Touch and hold a card for actions. Stock is saved on this device and
           updated manually.
         </Text>
+        <Text
+          accessibilityRole="header"
+          style={[
+            typography.cardTitle,
+            styles.note,
+            { color: theme.colours.textPrimary },
+          ]}
+        >
+          Apple Health
+        </Text>
+        <Text style={text}>
+          This step only requests access to medications in Apple Health. Linking
+          medications and stock integration are not yet available.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Request Apple Health medication access"
+          accessibilityState={{ disabled: busy || !!editor, busy: healthBusy }}
+          disabled={busy || !!editor}
+          onPress={requestHealthAccess}
+          style={styles.action}
+        >
+          <Text
+            style={[typography.bodyStrong, { color: theme.colours.action }]}
+          >
+            {healthBusy
+              ? 'Requesting Apple Health access…'
+              : 'Request Apple Health medication access'}
+          </Text>
+        </Pressable>
+        {healthNotice !== '' && (
+          <Text accessibilityRole="alert" style={text}>
+            {healthNotice}
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

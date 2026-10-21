@@ -1,6 +1,6 @@
 # Medication Phase 2 — per-object authorization correction
 
-Phase 2 adds read-only Health medication access and inventory linking commands. No visible Health-linking UI, MedicationScreen integration, observers, background delivery, anchors, Health writes, external processing or new dependencies were added. Phase 3 is not started.
+Phase 2 adds read-only Health medication access and inventory linking commands. The subsequent access-only UI slice adds “Request Apple Health medication access” on MedicationScreen, using the existing bridge with transient busy/outcome state. It performs no Health queries, linking or stock changes. Health-linking and stock-integration UI remain unavailable. No observers, background delivery, anchors, Health writes, external processing or new dependencies were added.
 
 ## API evidence and availability
 
@@ -21,7 +21,7 @@ Apple declaration sources:
 `MedicationHealth` exports promises:
 
 - `availability()` → `available | unsupported`.
-- `requestMedicationAccess()` → resolves after the per-object flow completes and its transparent host is dismissed, or rejects with a sanitized error. Only an explicit user-initiated caller invokes this; no production screen invokes it in Phase 2. No access-granted flag is returned. A separate data-access check can call `listMedications()` afterward (omit it for the cancellation-only check below); an empty result is valid and cannot distinguish denial from no readable medications.
+- `requestMedicationAccess()` → resolves after the per-object flow completes and its transparent host is dismissed, or rejects with a sanitized error. Only an explicit user-initiated caller invokes this; MedicationScreen now invokes it only from its explicit access-request control. No access-granted flag is returned. A separate data-access check can call `listMedications()` afterward (omit it for the cancellation-only check below); an empty result is valid and cannot distinguish denial from no readable medications.
 - `listMedications()` → `{conceptReference, displayName, nickname, form, isArchived, hasSchedule}[]`.
 - `readDoseSnapshot({baselineId, conceptReference, from, through})` → Phase 1 snapshot (`coverage`, `events` and unchanged request provenance).
 - `validateConceptReference(reference)` → true or error.
@@ -84,7 +84,9 @@ The callback is delivered after the production presenter dismisses its host. The
 
 These are user-reported results, not a new run in this workspace. The exact completion activity was not supplied: the test accepts either successful flow completion or explicit `authorization-cancelled`, so the observed cancellation must not be used to infer which callback result occurred.
 
-## Proposed next check: cancellation through the product UI
+## Product UI implementation and cancellation check
+
+The access-only control and focused tests are now implemented. Tests cover completion, cancellation, failure, unavailable Health, retry, same-tick duplicate prevention, unmount and absence of queries/writes. The existing screen busy guard blocks overlapping actions until settlement; `finally` restores interaction. Device acceptance remains pending. Use **Request Apple Health medication access** in the procedure below, with an already-initialized v2 collection. The following proposal records the inspection and rationale before this implementation; its statements about missing UI are historical.
 
 Source inspection shows this path exists but has no production UI caller:
 

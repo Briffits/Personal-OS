@@ -6,6 +6,10 @@ import { ActionSheetIOS, Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import MedicationScreen from '../src/screens/MedicationScreen';
 import MedicationForm from '../src/components/MedicationForm';
+import {
+  MedicationHealthError,
+  NativeMedicationHealth,
+} from '../src/native/NativeMedicationHealth';
 import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
 import type {
@@ -31,6 +35,17 @@ jest.mock('../src/native/NativeMedicationStorage', () => ({
 jest.mock('../src/native/NativePrescriptionDocuments', () => ({
   NativePrescriptionDocuments: { read: jest.fn() },
 }));
+jest.mock('../src/native/NativeMedicationHealth', () => ({
+  ...jest.requireActual('../src/native/NativeMedicationHealth'),
+  NativeMedicationHealth: {
+    requestMedicationAccess: jest.fn(),
+    availability: jest.fn(),
+    listMedications: jest.fn(),
+    readDoseSnapshot: jest.fn(),
+    validateConceptReference: jest.fn(),
+    compareConceptReferences: jest.fn(),
+  },
+}));
 let screen: ReactTestRenderer.ReactTestRenderer;
 let fixture: ReturnType<typeof medicationFixture>;
 const back = jest.fn();
@@ -48,6 +63,10 @@ const prescriptions = [prescriptionId, otherPrescriptionId].map((id, i) => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest
+    .mocked(NativeMedicationHealth.requestMedicationAccess)
+    .mockReset()
+    .mockResolvedValue(undefined);
   fixture = medicationFixture();
   jest
     .mocked(NativeMedicationStorage.read)
@@ -736,4 +755,134 @@ test('fractional correction/addition and user-controlled threshold are accessibl
   await act(async () => promptButtons()[1].onPress(''));
   expect(fixture.state().records[0].lowStockThreshold).toBeNull();
   expect(card().props.accessibilityLabel).not.toContain('Low stock');
+});
+
+const healthAction = 'Request Apple Health medication access';
+function expectNoHealthDataOperations() {
+  for (const [operationName, operation] of Object.entries(
+    NativeMedicationHealth,
+  )) {
+    if (operationName !== 'requestMedicationAccess')
+      expect(operation).not.toHaveBeenCalled();
+  }
+  expect(NativeMedicationStorage.read).toHaveBeenCalledTimes(1);
+  expect(NativeMedicationStorage.mutate).not.toHaveBeenCalled();
+  expect(NativePrescriptionDocuments.read).not.toHaveBeenCalled();
+  expect(fixture.state()).toEqual(initialCollection());
+}
+
+test.each([
+  [null, 'Access request finished. Access has not been checked.'],
+  ['authorization-cancelled', 'Access request cancelled.'],
+  ['authorization-failed', 'could not be completed'],
+  ['health-unavailable', 'unavailable on this device'],
+])(
+  'Health outcome %s clears busy state, preserves data and allows retry',
+  async (code, message) => {
+    await render();
+    expect(
+      NativeMedicationHealth.requestMedicationAccess,
+    ).not.toHaveBeenCalled();
+    expect(rendered()).toContain('stock integration are not yet available');
+    let settle!: () => void;
+    jest
+      .mocked(NativeMedicationHealth.requestMedicationAccess)
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            settle = () =>
+              code ? reject(new MedicationHealthError(code)) : resolve();
+          }),
+      );
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = button(healthAction).props.onPress();
+    });
+    expect(button(healthAction).props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(rendered()).toContain('Requesting Apple Health access');
+    await act(async () => {
+      settle();
+      await pending;
+    });
+    expect(rendered()).toContain(message);
+    expect(button(healthAction).props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+    expect(button('Add medication').props.disabled).toBe(false);
+    expectNoHealthDataOperations();
+    await press(healthAction);
+    expect(
+      NativeMedicationHealth.requestMedicationAccess,
+    ).toHaveBeenCalledTimes(2);
+    expectNoHealthDataOperations();
+    await press('Back to Library');
+    expect(back).toHaveBeenCalledTimes(1);
+    await action('add');
+    await act(async () => promptButtons()[1].onPress('2'));
+    expect(recordedQuantity(fixture.state().records[0])).toBe(14);
+  },
+);
+
+test('Health request blocks same-tick duplicate taps and overlapping manual actions', async () => {
+  await render();
+  let finish!: () => void;
+  jest
+    .mocked(NativeMedicationHealth.requestMedicationAccess)
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        }),
+    );
+  const request = button(healthAction).props.onPress;
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = request();
+    request();
+  });
+  await press(healthAction);
+  await press('Add medication');
+  await action('add');
+  expect(screen.root.findAllByType(MedicationForm)).toHaveLength(0);
+  expect(prompt).not.toHaveBeenCalled();
+  expect(NativeMedicationHealth.requestMedicationAccess).toHaveBeenCalledTimes(
+    1,
+  );
+  await act(async () => {
+    finish();
+    await pending;
+  });
+  expectNoHealthDataOperations();
+});
+
+test('unmounted Health request settles safely and stale control cannot request again', async () => {
+  await render();
+  let reject!: (error: Error) => void;
+  jest
+    .mocked(NativeMedicationHealth.requestMedicationAccess)
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((_, fail) => {
+          reject = fail;
+        }),
+    );
+  const request = button(healthAction).props.onPress;
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = request();
+  });
+  await act(async () => screen.unmount());
+  await act(async () => {
+    reject(new Error('Unavailable'));
+    await pending;
+    await request();
+  });
+  expect(NativeMedicationHealth.requestMedicationAccess).toHaveBeenCalledTimes(
+    1,
+  );
+  expectNoHealthDataOperations();
 });
