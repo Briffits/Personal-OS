@@ -120,15 +120,43 @@ final class MedicationNativeTests: XCTestCase {
     }
   }
 
+  func testAuthorizationCompletionMapping() throws {
+    XCTAssertNoThrow(try MedicationHealthAuthorization.sanitized(.success(true)).get())
+    XCTAssertThrowsError(try MedicationHealthAuthorization.sanitized(.success(false)).get()) {
+      XCTAssertEqual($0 as? MedicationHealthError, .authorizationFailed)
+    }
+    let cancelled = NSError(domain: HKErrorDomain, code: HKError.Code.errorUserCanceled.rawValue)
+    XCTAssertThrowsError(try MedicationHealthAuthorization.sanitized(.failure(cancelled)).get()) {
+      XCTAssertEqual($0 as? MedicationHealthError, .authorizationCancelled)
+    }
+    XCTAssertThrowsError(try MedicationHealthAuthorization.sanitized(.failure(NSError(domain: "synthetic", code: 1))).get()) {
+      XCTAssertEqual($0 as? MedicationHealthError, .authorizationFailed)
+    }
+  }
+
   // Opt in ONLY on a dedicated test device/store with two manually entered
   // synthetic medications. Apple provides no public identifier constructor.
   // No identifier, medication metadata or archive is printed or saved.
+  @MainActor
   func testRealIdentifierSecureRoundTripAndSemanticEquality() async throws {
     guard #available(iOS 26.0, *), ProcessInfo.processInfo.environment["PERSONALOS_SYNTHETIC_HEALTH_TESTS"] == "1" else {
       throw XCTSkip("Requires explicit opt-in and two synthetic Health medications")
     }
+    // Manually running this opted-in test initiates the same presenter as RN.
+    let completed = expectation(description: "System medication selection completed")
+    var authorization: Result<Void, MedicationHealthError>?
+    MedicationHealthAuthorization.shared.requestAccess {
+      authorization = $0
+      completed.fulfill()
+    }
+    await fulfillment(of: [completed], timeout: 120)
+    try XCTUnwrap(authorization).get()
+    let reader = MedicationHealthReader()
+    let readable = try await withCheckedThrowingContinuation { continuation in
+      reader.list { continuation.resume(with: $0) }
+    }
+    XCTAssertGreaterThanOrEqual(readable.count, 2, "Select both synthetic medications in the system sheet")
     let store = HKHealthStore()
-    try await store.requestAuthorization(toShare: [], read: [HKObjectType.userAnnotatedMedicationType()])
     let medications = try await HKUserAnnotatedMedicationQueryDescriptor(predicate: nil, limit: nil).result(for: store)
     XCTAssertGreaterThanOrEqual(medications.count, 2)
     guard medications.count >= 2 else { return }

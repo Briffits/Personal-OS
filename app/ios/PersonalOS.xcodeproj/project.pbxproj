@@ -31,6 +31,8 @@
 		AAD200000000000000000193 = {isa = PBXBuildFile; fileRef = AAD200000000000000000066; };
 		AAD200000000000000000194 = {isa = PBXBuildFile; fileRef = AAD200000000000000000069; };
 		AAD200000000000000000195 = {isa = PBXBuildFile; fileRef = AAD20000000000000000006A; };
+		AAD2000000000000000000CD = {isa = PBXBuildFile; fileRef = AAD20000000000000000006C; };
+		AAD200000000000000000196 = {isa = PBXBuildFile; fileRef = AAD20000000000000000006C; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +63,7 @@
 		AAD20000000000000000006A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tests/MedicationHealthTests.swift; sourceTree = "<group>"; };
 		AAD20000000000000000006B = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalOS/PersonalOS.entitlements; sourceTree = "<group>"; };
 		AAD20000000000000000012C = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PersonalOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AAD20000000000000000006C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationHealthAuthorization.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +111,7 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				AAD20000000000000000006C,
 				AAD20000000000000000006B,
 				AAD20000000000000000006A,
 				AAD200000000000000000069,
@@ -318,6 +322,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AAD2000000000000000000CD,
 				AAD2000000000000000000CC,
 				AAD2000000000000000000CB,
 				AAD2000000000000000000CA,
@@ -335,7 +340,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AAD20000000000000000012D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AAD200000000000000000190, AAD200000000000000000191, AAD200000000000000000192, AAD200000000000000000193, AAD200000000000000000194, AAD200000000000000000195,); runOnlyForDeploymentPostprocessing = 0; };
+		AAD20000000000000000012D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AAD200000000000000000190, AAD200000000000000000191, AAD200000000000000000192, AAD200000000000000000193, AAD200000000000000000194, AAD200000000000000000195, AAD200000000000000000196,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

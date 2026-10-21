@@ -8,18 +8,6 @@ final class MedicationHealthReader {
     if #available(iOS 26.0, *), HKHealthStore.isHealthDataAvailable() { return "available" }
     return "unsupported"
   }
-  func requestAccess(completion: @escaping (Result<Void, MedicationHealthError>) -> Void) {
-    guard #available(iOS 26.0, *), availability() == "available" else {
-      completion(.failure(.unavailable)); return
-    }
-    // Medication authorization covers the associated dose events. Never ask to share/write.
-    store.requestAuthorization(toShare: [], read: [HKObjectType.userAnnotatedMedicationType()]) { success, error in
-      if let error = error as? HKError, error.code == .errorUserCanceled {
-        completion(.failure(.authorizationCancelled))
-      } else if error != nil || !success { completion(.failure(.authorizationFailed)) }
-      else { completion(.success(())) } // Not evidence that read permission was granted.
-    }
-  }
   func list(completion: @escaping (Result<[[String: Any]], MedicationHealthError>) -> Void) {
     guard #available(iOS 26.0, *), availability() == "available" else {
       completion(.failure(.unavailable)); return

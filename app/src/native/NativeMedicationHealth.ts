@@ -67,6 +67,8 @@ export const NativeMedicationHealth: Bridge = {
       return value;
     });
   },
+  // Explicit user action only. Completion is not evidence of read permission;
+  // listMedications() queries what the user actually made readable.
   requestMedicationAccess: () => call(() => native().requestMedicationAccess()),
   listMedications: () =>
     call(async () => {

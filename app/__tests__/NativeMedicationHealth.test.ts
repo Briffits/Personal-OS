@@ -116,6 +116,25 @@ test.each([
     message: `Health medication operation: ${code}.`,
   });
 });
+test('authorization waits for native completion and does not imply readable medications', async () => {
+  const native = bridge();
+  let complete!: () => void;
+  native.requestMedicationAccess.mockImplementation(
+    () => new Promise<void>(resolve => (complete = resolve)),
+  );
+  let settled = false;
+  const pending = NativeMedicationHealth.requestMedicationAccess().then(() => {
+    settled = true;
+  });
+  await Promise.resolve();
+  expect(settled).toBe(false);
+  expect(native.listMedications).not.toHaveBeenCalled();
+  complete();
+  await pending;
+  expect(settled).toBe(true);
+  expect(await NativeMedicationHealth.listMedications()).toEqual([]);
+  expect(native.requestMedicationAccess).toHaveBeenCalledTimes(1);
+});
 test('identity comparison is native semantic equality', async () => {
   const native = bridge();
   expect(

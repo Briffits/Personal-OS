@@ -19,7 +19,9 @@ final class MedicationHealthModule: NSObject {
   @objc(requestMedicationAccess:rejecter:)
   func requestMedicationAccess(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     DispatchQueue.main.async {
-      self.reader.requestAccess { result in self.finish(result.map { NSNull() }, resolve, reject) }
+      MedicationHealthAuthorization.shared.requestAccess { result in
+        self.finish(result.map { NSNull() }, resolve, reject)
+      }
     }
   }
   @objc(listMedications:rejecter:)
