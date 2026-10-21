@@ -194,7 +194,7 @@ private struct MedicationAuthorizationView: View {
   @State private var trigger = false
 
   var body: some View {
-    Color.clear
+    Color.blue
       .accessibilityHidden(true)
       .healthDataAccessRequest(
         store: store,
