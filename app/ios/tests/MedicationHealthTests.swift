@@ -1,5 +1,6 @@
 import XCTest
 import HealthKit
+import UIKit
 
 private final class MemoryMedicationKeychain: MedicationKeychainAccess {
   var data: Data?
@@ -134,6 +135,27 @@ final class MedicationNativeTests: XCTestCase {
     }
   }
 
+  @MainActor
+  private static func authorizationPresentationContextIsReady() -> Bool {
+    // Follow the original presenter's window selection and presented chain.
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .filter { $0.activationState == .foregroundActive }
+      .flatMap { $0.windows }
+      .filter { $0.isKeyWindow }
+    guard windows.count == 1, let window = windows.first,
+          var controller = window.rootViewController else { return false }
+    while true {
+      // Wait for the whole presentation chain to settle, including ancestors.
+      guard !controller.isBeingPresented, !controller.isBeingDismissed,
+            controller.transitionCoordinator == nil else { return false }
+      guard let presented = controller.presentedViewController else {
+        return controller.viewIfLoaded?.window === window
+      }
+      controller = presented
+    }
+  }
+
   // Physical-device UI smoke test only. It never reads Health data or writes
   // application data. No selection is required; completing selection may
   // change Health access permissions. Cancel for the cancellation smoke check.
@@ -147,7 +169,23 @@ final class MedicationNativeTests: XCTestCase {
       throw XCTSkip("Requires iOS 26+ and explicit authorization smoke-test opt-in")
     }
 
-    let completed = expectation(description: "Authorization sheet dismissed")
+    // Test launch may still be presenting a controller. Poll only this prerequisite;
+    // the production presenter remains immediate and is called exactly once.
+    let readinessDeadline = ProcessInfo.processInfo.systemUptime + 10
+    while true {
+      guard ProcessInfo.processInfo.systemUptime < readinessDeadline else {
+        XCTFail("Presentation prerequisite failed: no settled foreground context within 10 seconds; authorization presenter was not called")
+        return
+      }
+      if Self.authorizationPresentationContextIsReady() { break }
+      // Yield to UIKit between condition checks; no fixed pre-request sleep.
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { continuation.resume() }
+      }
+    }
+    // No suspension between the final main-actor readiness check and the request.
+    XCTContext.runActivity(named: "Presentation prerequisite satisfied; calling original presenter") { _ in }
+    let completed = expectation(description: "Authorization callback received")
     completed.assertForOverFulfill = true
     var result: Result<Void, MedicationHealthError>?
     MedicationHealthAuthorization.shared.requestAccess {
@@ -158,11 +196,11 @@ final class MedicationNativeTests: XCTestCase {
     await fulfillment(of: [completed], timeout: 120)
     switch try XCTUnwrap(result) {
     case .success:
-      // Flow completed and presenter dismissed. This does not establish access.
-      XCTContext.runActivity(named: "Authorization flow completed; access not checked") { _ in }
+      // Callback success establishes neither visible presentation nor read access.
+      XCTContext.runActivity(named: "Callback succeeded; sheet visibility and access not verified") { _ in }
     case .failure(.authorizationCancelled):
-      // Cancellation is an expected smoke-test outcome.
-      XCTContext.runActivity(named: "Authorization flow cancelled as expected") { _ in }
+      // This error alone does not establish that a sheet was visible.
+      XCTContext.runActivity(named: "Cancellation error received; sheet visibility not verified") { _ in }
     case .failure(let error):
       XCTFail("Unexpected authorization presenter result: \(error.rawValue)")
     }
