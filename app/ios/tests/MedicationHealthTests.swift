@@ -1,5 +1,7 @@
 import XCTest
 import HealthKit
+import SwiftUI
+import UIKit
 
 private final class MemoryMedicationKeychain: MedicationKeychainAccess {
   var data: Data?
@@ -131,6 +133,62 @@ final class MedicationNativeTests: XCTestCase {
     }
     XCTAssertThrowsError(try MedicationHealthAuthorization.sanitized(.failure(NSError(domain: "synthetic", code: 1))).get()) {
       XCTAssertEqual($0 as? MedicationHealthError, .authorizationFailed)
+    }
+  }
+
+  @MainActor
+  func testAuthorizationReadinessRejectsDetachedHostAsynchronously() async {
+    let host = UIViewController()
+    XCTAssertFalse(MedicationHealthAuthorization.isReadyForAuthorization(host))
+    let checked = expectation(description: "Detached host rejected once")
+    checked.assertForOverFulfill = true
+    var returned = false
+    MedicationHealthAuthorization.waitForPresentation(host) { ready in
+      XCTAssertTrue(returned)
+      XCTAssertFalse(ready)
+      checked.fulfill()
+    }
+    returned = true
+    await fulfillment(of: [checked], timeout: 5)
+  }
+
+  // Exercises UIKit/SwiftUI host lifecycle without installing a Health modifier,
+  // requesting access, reading Health, or touching application storage.
+  @MainActor
+  func testAuthorizationReadinessAfterHostingPresentation() async throws {
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .filter { $0.activationState == .foregroundActive }
+      .flatMap { $0.windows }.filter { $0.isKeyWindow }
+    guard windows.count == 1, let root = windows.first?.rootViewController,
+          root.presentedViewController == nil, root.transitionCoordinator == nil else {
+      throw XCTSkip("Requires a settled foreground test host")
+    }
+    // Cover the production nonanimated presentation and a real animated transition.
+    for animated in [false, true] {
+      let host = UIHostingController(rootView: Color.clear)
+      host.modalPresentationStyle = .overFullScreen
+      let checked = expectation(description: "Attached host ready once")
+      checked.assertForOverFulfill = true
+      root.present(host, animated: animated) {
+        var returned = false
+        MedicationHealthAuthorization.waitForPresentation(host) { ready in
+          XCTAssertTrue(returned)
+          XCTAssertTrue(ready)
+          XCTAssertNil(host.transitionCoordinator)
+          XCTAssertTrue(host.presentingViewController === root)
+          checked.fulfill()
+        }
+        returned = true
+      }
+      if animated {
+        XCTAssertFalse(MedicationHealthAuthorization.isReadyForAuthorization(host))
+      }
+      await fulfillment(of: [checked], timeout: 5)
+      let dismissed = expectation(description: "Host dismissed")
+      host.dismiss(animated: false) { dismissed.fulfill() }
+      await fulfillment(of: [dismissed], timeout: 5)
+      XCTAssertFalse(MedicationHealthAuthorization.isReadyForAuthorization(host))
     }
   }
 

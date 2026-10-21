@@ -52,7 +52,7 @@ final class MedicationHealthAuthorization {
     controller.isModalInPresentation = true
     host = controller
     finishing = false
-    // Change SwiftUI's State trigger only after UIKit finishes presentation.
+    // UIKit's presentation callback can still expose a transition coordinator.
     #if DEBUG
     Self.traceContext("presenter.selected", presenter)
     Self.traceContext("host.retained", controller)
@@ -61,8 +61,56 @@ final class MedicationHealthAuthorization {
       #if DEBUG
       Self.traceContext("host.presentationCompleted", controller)
       #endif
-      readiness.ready = true
+      Self.waitForPresentation(controller) { ready in
+        guard self.host === controller, !self.finishing else { return }
+        #if DEBUG
+        Self.traceContext(ready ? "host.ready" : "host.readinessRejected", controller)
+        #endif
+        guard ready else {
+          self.finish(.failure(.authorizationFailed), completion: completion)
+          return
+        }
+        readiness.ready = true
+      }
     }
+  }
+
+  // Called from present's completion (after viewDidAppear). Leave UIKit's
+  // callback stack before inspecting state or publishing to SwiftUI. A queue
+  // turn is not evidence of readiness: the live hierarchy must also be settled.
+  // No timer, polling, or deferred prompt after returning to the foreground.
+  static func waitForPresentation(_ controller: UIViewController,
+                                  completion: @escaping (Bool) -> Void) {
+    var delivered = false
+    func checkAfterUnwinding(cancelled: Bool) {
+      DispatchQueue.main.async {
+        guard !delivered else { return }
+        delivered = true
+        completion(!cancelled && Self.isReadyForAuthorization(controller))
+      }
+    }
+    if let coordinator = controller.transitionCoordinator {
+      let registered = coordinator.animate(alongsideTransition: nil) { context in
+        checkAfterUnwinding(cancelled: context.isCancelled)
+      }
+      // Registration may be too late in UIKit's completion phase. Apple notes
+      // that its callback may still run after returning false; deliver once.
+      if !registered { checkAfterUnwinding(cancelled: coordinator.isCancelled) }
+    } else {
+      checkAfterUnwinding(cancelled: false)
+    }
+  }
+
+  static func isReadyForAuthorization(_ controller: UIViewController) -> Bool {
+    guard let window = controller.viewIfLoaded?.window,
+          window.isKeyWindow,
+          window.windowScene?.activationState == .foregroundActive,
+          let presenter = controller.presentingViewController else { return false }
+    return presenter.presentedViewController === controller
+      && controller.presentedViewController == nil
+      && !controller.isBeingPresented && !controller.isBeingDismissed
+      && !presenter.isBeingPresented && !presenter.isBeingDismissed
+      && controller.transitionCoordinator == nil && presenter.transitionCoordinator == nil
   }
 
   nonisolated static func sanitized(_ result: Result<Bool, Error>) -> Result<Void, MedicationHealthError> {
