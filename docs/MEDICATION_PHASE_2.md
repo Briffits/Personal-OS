@@ -57,6 +57,21 @@ The previously dangling scheme ID now identifies a genuine hosted `PersonalOSTes
 
 Native unit tests cover successful/false completion and sanitized cancellation/failure mapping. Jest verifies that the bridge waits for completion, never automatically queries or prompts, and permits an empty readable list after completion. The real identifier round-trip/equality test is opt-in and otherwise explicitly skipped. It runs on the main actor and invokes the exact `MedicationHealthAuthorization` presenter used by production, waits up to 120 seconds for manual system-sheet interaction, then checks the production reader before querying actual identifiers for archive checks. It never calls type-wide authorization. It uses two synthetic medications manually entered in a dedicated Health store; secure binary and XML archives of one actual identifier must compare equal despite different bytes, and a second concept must compare unequal. No Health data or archives are committed, logged or persisted by the test. This integration test is required before declaring native identity validation complete.
 
+### Everyday-device authorization presenter smoke test
+
+`PersonalOSTests/MedicationNativeTests/testAuthorizationPresenterSmoke` is a separate physical-device UI smoke test for the production `MedicationHealthAuthorization` presenter. It is skipped unless the Test action environment contains `PERSONALOS_AUTHORIZATION_SMOKE_TEST=1`. It presents Apple's medication authorization sheet, waits up to 120 seconds for dismissal and checks only the presenter's sanitized completion result. Successful completion and `authorization-cancelled` are expected outcomes; any other error fails. The test does not query Health, inspect or assert medication records or identifiers, archive data, or write Health, inventory, prescription or Keychain data. It requires no medication selection or synthetic records and does not validate data access, identifier equality or the React Native bridge.
+
+Run this test on the everyday iPhone as follows:
+
+1. Open `app/ios/PersonalOS.xcworkspace` in Xcode with the iOS 26+ SDK. Select the **PersonalOS** scheme and the unlocked physical iPhone running iOS 26+. Simulator runs skip.
+2. Open **Product → Scheme → Edit Scheme → Test → Arguments**. Disable **Use the Run action's arguments and environment variables** if necessary. Add and enable `PERSONALOS_AUTHORIZATION_SMOKE_TEST` with value `1`. Leave `PERSONALOS_SYNTHETIC_HEALTH_TESTS` unset or disabled.
+3. Start Metro if the Debug host needs it. In the Test navigator, expand **PersonalOSTests → MedicationNativeTests** and run only **testAuthorizationPresenterSmoke** using its individual run control. Keep the host app foregrounded.
+4. Manually confirm Apple's medication-selection sheet appears, then cancel within 120 seconds without selecting medications. Confirm the sheet dismisses and the app returns. No synthetic records or medication selection are required. Successful completion is also accepted, but completing selection could change Health access permissions, even though this test makes no Health-record or application-storage writes.
+5. Inspect the test report: a passing run records either **Authorization flow cancelled as expected** or **Authorization flow completed; access not checked**. These activities contain only fixed outcome labels. Only the presenter's explicit `authorization-cancelled` result counts as cancellation; Apple's false completion maps to `authorization-failed` and fails, as do other errors, duplicate callbacks and timeouts. Missing opt-in or iOS below 26 skips rather than passes.
+6. Disable the smoke-test environment flag after the run. If the test times out with the sheet still open, dismiss it and stop the test host before retrying.
+
+The callback is delivered after the production presenter dismisses its host. The automated assertion checks that callback's outcome; it does not independently prove that the system sheet was visible, so the visual observation above is part of this manual smoke check. This test does not validate Health data access, identifier equality or the RN bridge. Native compilation and execution of this new test remain unverified.
+
 ## Validation performed on Linux
 
 - Complete Jest suite: **15 suites, 388 tests passed**.

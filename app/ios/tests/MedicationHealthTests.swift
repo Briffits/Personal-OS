@@ -134,6 +134,41 @@ final class MedicationNativeTests: XCTestCase {
     }
   }
 
+  // Physical-device UI smoke test only. It never reads Health data or writes
+  // application data. No selection is required; completing selection may
+  // change Health access permissions. Cancel for the cancellation smoke check.
+  @MainActor
+  func testAuthorizationPresenterSmoke() async throws {
+    #if targetEnvironment(simulator)
+    throw XCTSkip("Requires a physical iPhone")
+    #else
+    guard #available(iOS 26.0, *),
+          ProcessInfo.processInfo.environment["PERSONALOS_AUTHORIZATION_SMOKE_TEST"] == "1" else {
+      throw XCTSkip("Requires iOS 26+ and explicit authorization smoke-test opt-in")
+    }
+
+    let completed = expectation(description: "Authorization sheet dismissed")
+    completed.assertForOverFulfill = true
+    var result: Result<Void, MedicationHealthError>?
+    MedicationHealthAuthorization.shared.requestAccess {
+      result = $0
+      completed.fulfill()
+    }
+
+    await fulfillment(of: [completed], timeout: 120)
+    switch try XCTUnwrap(result) {
+    case .success:
+      // Flow completed and presenter dismissed. This does not establish access.
+      XCTContext.runActivity(named: "Authorization flow completed; access not checked") { _ in }
+    case .failure(.authorizationCancelled):
+      // Cancellation is an expected smoke-test outcome.
+      XCTContext.runActivity(named: "Authorization flow cancelled as expected") { _ in }
+    case .failure(let error):
+      XCTFail("Unexpected authorization presenter result: \(error.rawValue)")
+    }
+    #endif
+  }
+
   // Opt in ONLY on a dedicated test device/store with two manually entered
   // synthetic medications. Apple provides no public identifier constructor.
   // No identifier, medication metadata or archive is printed or saved.
