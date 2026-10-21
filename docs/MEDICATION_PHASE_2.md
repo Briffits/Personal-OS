@@ -4,7 +4,7 @@ Phase 2 adds read-only Health medication access and inventory linking commands. 
 
 ## API evidence and availability
 
-The previous Phase 2 candidate completed Mac and physical-iPhone validation up to authorization, where the device exposed the invalid type-wide authorization call. This correction was made on Linux, without Xcode or an Apple SDK. **The corrected native code has not yet been compiled or run on Mac/iPhone.** The implementation uses Apple's published Swift declarations, fetched during implementation, rather than inferred method names. Xcode with the iOS 26 SDK or newer is required; the application's existing deployment settings are unchanged. Runtime calls are guarded by iOS 26.0 availability and `HKHealthStore.isHealthDataAvailable()`.
+The previous Phase 2 candidate completed Mac and physical-iPhone validation up to authorization, where the device exposed the invalid type-wide authorization call. This correction was made on Linux, without Xcode or an Apple SDK. **The corrected presenter smoke test subsequently passed on the Mac validation branch at `09cad0d`, with local Xcode configuration changes; the scope and remaining gaps are recorded below.** The implementation uses Apple's published Swift declarations, fetched during implementation, rather than inferred method names. Xcode with the iOS 26 SDK or newer is required; the application's existing deployment settings are unchanged. Runtime calls are guarded by iOS 26.0 availability and `HKHealthStore.isHealthDataAvailable()`.
 
 Apple declaration sources:
 
@@ -21,7 +21,7 @@ Apple declaration sources:
 `MedicationHealth` exports promises:
 
 - `availability()` → `available | unsupported`.
-- `requestMedicationAccess()` → resolves after the per-object flow completes and its transparent host is dismissed, or rejects with a sanitized error. Only an explicit user-initiated caller invokes this; no production screen invokes it in Phase 2. No access-granted flag is returned. Call `listMedications()` afterward; an empty result is valid and cannot distinguish denial from no readable medications.
+- `requestMedicationAccess()` → resolves after the per-object flow completes and its transparent host is dismissed, or rejects with a sanitized error. Only an explicit user-initiated caller invokes this; no production screen invokes it in Phase 2. No access-granted flag is returned. A separate data-access check can call `listMedications()` afterward (omit it for the cancellation-only check below); an empty result is valid and cannot distinguish denial from no readable medications.
 - `listMedications()` → `{conceptReference, displayName, nickname, form, isArchived, hasSchedule}[]`.
 - `readDoseSnapshot({baselineId, conceptReference, from, through})` → Phase 1 snapshot (`coverage`, `events` and unchanged request provenance).
 - `validateConceptReference(reference)` → true or error.
@@ -70,7 +70,40 @@ Run this test on the everyday iPhone as follows:
 5. Inspect the test report: a passing run records either **Authorization flow cancelled as expected** or **Authorization flow completed; access not checked**. These activities contain only fixed outcome labels. Only the presenter's explicit `authorization-cancelled` result counts as cancellation; Apple's false completion maps to `authorization-failed` and fails, as do other errors, duplicate callbacks and timeouts. Missing opt-in or iOS below 26 skips rather than passes.
 6. Disable the smoke-test environment flag after the run. If the test times out with the sheet still open, dismiss it and stop the test host before retrying.
 
-The callback is delivered after the production presenter dismisses its host. The automated assertion checks that callback's outcome; it does not independently prove that the system sheet was visible, so the visual observation above is part of this manual smoke check. This test does not validate Health data access, identifier equality or the RN bridge. Native compilation and execution of this new test remain unverified.
+The callback is delivered after the production presenter dismisses its host. The automated assertion checks that callback's outcome; it does not independently prove that the system sheet was visible, so the visual observation above is part of this manual smoke check. This test does not validate Health data access, identifier equality or the RN bridge. Compilation and execution of this smoke test are reported below; continued app usability after cancellation remains unverified.
+
+## Reported physical-device validation
+
+- Build: Mac validation branch at `09cad0d`, with local Xcode configuration changes. This result does not establish that the unmodified commit builds with the same configuration.
+- Environment: Xcode **27.1**; **iPhone 13 Pro**, **iOS 27.0.1**. The exact SDK version was not separately supplied.
+- `testAuthorizationPresenterSmoke`: **passed in 39 seconds**.
+- The user observed Apple's medication-selection sheet and cancelled without selecting any medications.
+- The app closed afterwards. Whether this was test-runner teardown is **unverified**; the pass does not establish return to a usable app.
+- The report contains an internal thread-priority inversion warning. Its cause is **unverified**; no causal link to the app closing is established.
+- Health data access, identifier equality and the React Native bridge remain **unverified**.
+
+These are user-reported results, not a new run in this workspace. The exact completion activity was not supplied: the test accepts either successful flow completion or explicit `authorization-cancelled`, so the observed cancellation must not be used to infer which callback result occurred.
+
+## Proposed next check: cancellation through the product UI
+
+Source inspection shows this path exists but has no production UI caller:
+
+`NativeMedicationHealth.requestMedicationAccess()` → Objective-C `MedicationHealth` bridge → `MedicationHealthModule.requestMedicationAccess` → main-thread `MedicationHealthAuthorization` → Apple's sheet → host dismissal → native promise settlement → TypeScript result/error.
+
+The adapter preserves sanitized error codes. The presenter clears its host and in-flight guard before settling the promise. This path performs no Health-record query or inventory/prescription mutation. `App.tsx` and `MedicationScreen.tsx` do not currently invoke it; the native XCTest calls the presenter directly and bypasses the RN bridge.
+
+**Use the planned Medication Health-connection UI for this check, rather than another temporary test interface.** This would be a small first slice of the planned product UI, not an interface already available today. Proposed implementation scope is an explicit “Connect Apple Health” action in `app/src/screens/MedicationScreen.tsx`, using the existing adapter, with transient busy/outcome state and cleanup in `finally`. Handle explicit cancellation without treating it as failure or persisting a connection flag; distinguish other errors with a retryable message. Successful completion must not claim access was granted. Keep authorisation separate from later querying, linking and baseline confirmation, including on successful completion during this slice. Do not reuse the screen's inventory-mutation `run()` helper, which announces a save and can reload storage. No new dependency, native API or permission type is needed. UI implementation and focused cancellation/cleanup tests are proposed only; none were added here.
+
+Manual acceptance check once that product action exists:
+
+1. Use the same physical iPhone and record the actual revision and local configuration. Launch with Xcode **Run**, not **Test**, with both test opt-ins disabled and Metro available as needed. Keep the app foregrounded; do not stop the run during the check.
+2. Use an already-initialized version-2 Medication collection. `MedicationScreen` reads storage on mount, and native `read()` can initialize or migrate older storage, so a fresh install or pending migration would violate this check's no-data-change condition. Do not create or migrate data as part of this check.
+3. Open Medication, tap the product Health-connection action, observe Apple's sheet, then cancel without selecting anything. Do not call `listMedications()`, `readDoseSnapshot()`, identity queries, link/unlink commands or stock/prescription mutations, even if the authorisation promise resolves successfully. No automatic follow-up query or reload should run.
+4. Confirm the promise settles through RN and the UI clears its busy state. Record only a fixed completion label or sanitized error code, separately from the observed cancellation; never log Health content. Explicit `authorization-cancelled` is expected when Apple reports that error; a resolved promise means flow completion only. Other errors must remain visible as failures, even if navigation works.
+5. Confirm the same app session remains foregrounded and interactive: scroll, request the sheet a second time and cancel again, then use Back to Library and navigate to Today. There must be no stuck transparent host, blocked controls, automatic re-prompt, reload, crash or process exit. Check VoiceOver focus returns to usable app controls. Do not save or edit anything.
+6. Confirm the authorisation handler made zero Health-query or persistence calls and the existing collection/revision is unchanged, using read-only inspection without logging personal contents. A focused UI test should also assert those zero calls for cancellation, completion and failure, and that busy state clears. If the app closes again during Run, preserve sanitized termination diagnostics and investigate; do not label it test teardown. Record any priority warning separately, without assigning a cause.
+
+This checks RN-to-native presentation, settlement, dismissal and continued usability only. Health data access and identifier equality remain separate validation gates on the dedicated synthetic store. It requires no temporary global exposure or debug screen, and no new interface has been implemented in this documentation change.
 
 ## Validation performed on Linux
 
@@ -111,26 +144,7 @@ In Xcode, open `app/ios/PersonalOS.xcworkspace`, select the PersonalOS scheme an
 
 Repeat with cancellation and with fewer than two selected medications: cancellation should yield a sanitized authorization error when Apple reports one; fewer than two readable medications should fail the explicit count assertion, never be treated as successful access. These are intentional negative runs, not passing identity validations. Restore both selections and rerun for a passing result. Review all native unit tests, including `testAuthorizationCompletionMapping`. Linux Jest cannot validate SwiftUI presentation.
 
-To smoke-test the actual RN bridge without adding a product screen, temporarily expose the adapter in the local Debug build's `app/App.tsx`:
-
-```ts
-import { NativeMedicationHealth } from './src/native/NativeMedicationHealth';
-
-if (__DEV__) {
-  (globalThis as typeof globalThis & {
-    phase2Health?: typeof NativeMedicationHealth;
-  }).phase2Health = NativeMedicationHealth;
-}
-```
-
-Reload, keep the app foregrounded and manually run these expressions in React Native DevTools:
-
-```js
-await globalThis.phase2Health.requestMedicationAccess();
-(await globalThis.phase2Health.listMedications()).length;
-```
-
-Use only a synthetic store; inspect counts rather than printing medication DTOs or archives. Confirm only Apple's sheet appears, completion returns to the existing screen, and a second request works after dismissal. Repeat with no selections, partial selection, cancellation, and newly shared medications; query after each completed flow. Do not interpret promise resolution as granted access. To check overlap, manually start two requests together and inspect only settlement/error codes: the second must reject `authorization-failed` while the first remains active. Check background/no-window requests fail without a deferred prompt and that VoiceOver focuses the system sheet then returns to the app. Disable the test environment opt-in and remove the temporary import/global exposure after validation; do not commit that harness.
+For the next RN cancellation check, use the proposed product-UI acceptance procedure above. The former temporary `App.tsx` global/DevTools harness is superseded; querying Health records is outside that check. Broader data-access checks below remain separate.
 
 On a dedicated iPhone/test store, exercise user-initiated authorization, cancellation, denial/partial access, newly shared medications, readable archived items, fractional taken doses, skipped/unknown data where supported, edited/deleted/backdated dose snapshots, exact interval boundaries and malformed identity. Verify no write permission is requested. Check that all APIs compile with the actual installed SDK; adjust any SDK signature discrepancy before approval of native validation. Also run the existing standalone MedicationKeychain and PrescriptionDocumentStorage tests and the normal in-place upgrade/manual-stock smoke tests.
 
