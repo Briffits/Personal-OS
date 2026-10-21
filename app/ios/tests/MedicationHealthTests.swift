@@ -161,12 +161,16 @@ final class MedicationNativeTests: XCTestCase {
   // change Health access permissions. Cancel for the cancellation smoke check.
   @MainActor
   func testAuthorizationPresenterSmoke() async throws {
-    #if targetEnvironment(simulator)
-    throw XCTSkip("Requires a physical iPhone")
+    #if !DEBUG || !NATIVE_XCTEST || targetEnvironment(simulator)
+    throw XCTSkip("Requires a Debug native test build on a physical iPhone")
     #else
     guard #available(iOS 26.0, *),
           ProcessInfo.processInfo.environment["PERSONALOS_AUTHORIZATION_SMOKE_TEST"] == "1" else {
       throw XCTSkip("Requires iOS 26+ and explicit authorization smoke-test opt-in")
+    }
+    guard let value = ProcessInfo.processInfo.environment["PERSONALOS_AUTHORIZATION_HOST_RETENTION"],
+          let arm = MedicationHealthAuthorization.HostRetentionArm(rawValue: value) else {
+      throw XCTSkip("Set PERSONALOS_AUTHORIZATION_HOST_RETENTION to A or B for this comparison")
     }
 
     // Test launch may still be presenting a controller. Poll only this prerequisite;
@@ -184,16 +188,57 @@ final class MedicationNativeTests: XCTestCase {
       }
     }
     // No suspension between the final main-actor readiness check and the request.
-    XCTContext.runActivity(named: "Presentation prerequisite satisfied; calling original presenter") { _ in }
-    let completed = expectation(description: "Authorization callback received")
-    completed.assertForOverFulfill = true
+    XCTContext.runActivity(named: "Presentation prerequisite satisfied; host-retention arm \(arm.rawValue)") { _ in }
+    let received = expectation(description: "First Health callback or early presenter rejection received")
+    let observed = expectation(description: "Ten-second post-callback observation ended; visibility requires manual evidence")
+    let delivered = expectation(description: "Caller completion delivered after host dismissal")
+    for event in [received, observed, delivered] { event.assertForOverFulfill = true }
+    let authorization = MedicationHealthAuthorization.shared
+    var callbackTime: TimeInterval?
+    var deliveryTime: TimeInterval?
     var result: Result<Void, MedicationHealthError>?
-    MedicationHealthAuthorization.shared.requestAccess {
+    guard authorization.beginHostRetentionDiagnostic(arm: arm, onCallback: { _ in
+      callbackTime = ProcessInfo.processInfo.systemUptime
+      received.fulfill()
+    }, onObservationEnded: { retained in
+      // Object retention is not evidence that any screen was rendered.
+      XCTAssertEqual(retained, arm == .retained, "Unexpected host lifetime at observation deadline")
+      if let callbackTime {
+        XCTAssertGreaterThanOrEqual(ProcessInfo.processInfo.systemUptime - callbackTime, 10)
+      }
+      observed.fulfill()
+    }) else {
+      XCTFail("Diagnostic setup rejected; presenter was not called")
+      return
+    }
+    addTeardownBlock {
+      let cleaned = XCTestExpectation(description: "Diagnostic host cleanup completed")
+      await MainActor.run {
+        authorization.endHostRetentionDiagnostic { cleaned.fulfill() }
+      }
+      await self.fulfillment(of: [cleaned], timeout: 5)
+      await MainActor.run { XCTAssertFalse(authorization.hasHostForDiagnostic) }
+    }
+    authorization.requestAccess {
+      deliveryTime = ProcessInfo.processInfo.systemUptime
       result = $0
-      completed.fulfill()
+      // An availability/context rejection does not exercise the Health modifier.
+      if callbackTime == nil { received.fulfill() }
+      delivered.fulfill()
     }
 
-    await fulfillment(of: [completed], timeout: 120)
+    await fulfillment(of: [received], timeout: 120)
+    guard let callbackTime else {
+      XCTFail("No Health modifier callback observed; comparison incomplete (timeout or early presenter rejection)")
+      return // Teardown still cancels the timer and dismisses any retained host.
+    }
+    // A's early caller completion must not end XCTest. Both arms observe the
+    // same ten seconds, then allow up to five seconds for dismissal/delivery.
+    await fulfillment(of: [observed, delivered], timeout: 15)
+    if arm == .retained, let deliveryTime {
+      XCTAssertGreaterThanOrEqual(deliveryTime - callbackTime, 10)
+    }
+    XCTAssertFalse(authorization.hasHostForDiagnostic, "Host remains after normal cleanup")
     switch try XCTUnwrap(result) {
     case .success:
       // Callback success establishes neither visible presentation nor read access.
@@ -204,6 +249,7 @@ final class MedicationNativeTests: XCTestCase {
     case .failure(let error):
       XCTFail("Unexpected authorization presenter result: \(error.rawValue)")
     }
+    XCTContext.runActivity(named: "Automated callback/lifetime checks only; presentation acceptance requires device observation") { _ in }
     #endif
   }
 

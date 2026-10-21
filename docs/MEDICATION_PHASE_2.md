@@ -2,9 +2,21 @@
 
 Phase 2 adds read-only Health medication access and inventory linking commands. No visible Health-linking UI, MedicationScreen integration, observers, background delivery, anchors, Health writes, external processing or new dependencies were added. Phase 3 is not started.
 
+**Latest reported device result, `4ab5b66`: readiness-adjusted original smoke
+callback/cleanup PASS in 0.565 seconds; visibility UNVERIFIED; presentation
+acceptance UNMET.** A brief unidentified screen appeared, too briefly to identify;
+Apple's medication-selection sheet was NOT confirmed. The trace was
+`request.enter main=true`, `result.successTrue main=true`, then
+`caller.deliver.afterDismissal main=true`. Callback success is not presentation
+success. This diagnostic branch prepares a controlled immediate-cleanup versus
+10-second post-callback host-retention comparison with equal XCTest observation
+windows. It has not yet been built/run on Mac/iPhone. Follow only the
+[single-test procedure and data restrictions](../app/HEALTH_HOST_RETENTION_DIAGNOSTIC.md)
+for this experiment; broader validation procedures below are outside its scope.
+
 ## API evidence and availability
 
-The previous Phase 2 candidate completed Mac and physical-iPhone validation up to authorization, where the device exposed the invalid type-wide authorization call. This correction was made on Linux, without Xcode or an Apple SDK. **The corrected native code has not yet been compiled or run on Mac/iPhone.** The implementation uses Apple's published Swift declarations, fetched during implementation, rather than inferred method names. Xcode with the iOS 26 SDK or newer is required; the application's existing deployment settings are unchanged. Runtime calls are guarded by iOS 26.0 availability and `HKHealthStore.isHealthDataAvailable()`.
+The previous Phase 2 candidate completed Mac and physical-iPhone validation up to authorization, where the device exposed the invalid type-wide authorization call. This correction was initially made on Linux, without Xcode or an Apple SDK. The later original-presenter smoke result and current presentation limits are recorded above. The implementation uses Apple's published Swift declarations, fetched during implementation, rather than inferred method names. Xcode with the iOS 26 SDK or newer is required; the application's existing deployment settings are unchanged. Runtime calls are guarded by iOS 26.0 availability and `HKHealthStore.isHealthDataAvailable()`.
 
 Apple declaration sources:
 
@@ -27,7 +39,7 @@ Apple declaration sources:
 - `validateConceptReference(reference)` → true or error.
 - `compareConceptReferences(left, right)` → native semantic equality or error.
 
-`MedicationHealthModule` dispatches presentation to the main thread. `MedicationHealthAuthorization` finds the sole foreground key window and its top presented controller, then presents a transparent, over-full-screen `UIHostingController` without animation or app controls. After UIKit presentation completes, a readiness signal changes the SwiftUI `@State` trigger once. Only Apple's medication-selection sheet is visible. Completion dismisses the host and releases the in-flight guard before settling the promise. The reader is query-only. The Objective-C bridge selectors and TypeScript promise contract are unchanged.
+`MedicationHealthModule` dispatches presentation to the main thread. `MedicationHealthAuthorization` finds the sole foreground key window and its top presented controller, then presents a transparent, over-full-screen `UIHostingController` without animation or app controls. After UIKit presentation completes, a readiness signal changes the SwiftUI `@State` trigger once. Apple's medication-selection sheet is the intended visible UI; its visibility is not established by callback success. Production completion dismisses the host and releases the in-flight guard before settling the promise. The reader is query-only. The Objective-C bridge selectors and TypeScript promise contract are unchanged.
 
 Concurrent requests, missing/ambiguous foreground presentation contexts and active UIKit transitions fail with `authorization-failed`; they are never queued for later prompting. Unsupported OS/Health availability returns `health-unavailable`. Apple's `.success(true)` means request completion only; `.success(false)` maps to `authorization-failed`, without inventing a cancellation or denial distinction. Only `HKError.errorUserCanceled` maps to `authorization-cancelled`; other errors map to `authorization-failed`, without raw error details. No startup, query or background code initiates authorization.
 
@@ -59,18 +71,24 @@ Native unit tests cover successful/false completion and sanitized cancellation/f
 
 ### Everyday-device authorization presenter smoke test
 
-`PersonalOSTests/MedicationNativeTests/testAuthorizationPresenterSmoke` is a separate physical-device UI smoke test for the production `MedicationHealthAuthorization` presenter. It is skipped unless the Test action environment contains `PERSONALOS_AUTHORIZATION_SMOKE_TEST=1`. It presents Apple's medication authorization sheet, waits up to 120 seconds for dismissal and checks only the presenter's sanitized completion result. Successful completion and `authorization-cancelled` are expected outcomes; any other error fails. The test does not query Health, inspect or assert medication records or identifiers, archive data, or write Health, inventory, prescription or Keychain data. It requires no medication selection or synthetic records and does not validate data access, identifier equality or the React Native bridge.
+`PersonalOSTests/MedicationNativeTests/testAuthorizationPresenterSmoke` now runs
+the controlled host-retention comparison on this diagnostic branch. It requires
+a physical iPhone, Debug with `NATIVE_XCTEST`, Test-only
+`PERSONALOS_AUTHORIZATION_SMOKE_TEST=1` and
+`PERSONALOS_AUTHORIZATION_HOST_RETENTION=A` or `B`. Missing prerequisites skip;
+an unsettled presentation context fails before requesting authorization. Both
+arms observe for 10 seconds after the first Health callback, with bounded
+callback/cleanup waits and failure teardown. Successful completion and
+`authorization-cancelled` remain expected callback outcomes; they do not prove
+visible presentation or an actual manual cancellation.
 
-Run this test on the everyday iPhone as follows:
-
-1. Open `app/ios/PersonalOS.xcworkspace` in Xcode with the iOS 26+ SDK. Select the **PersonalOS** scheme and the unlocked physical iPhone running iOS 26+. Simulator runs skip.
-2. Open **Product → Scheme → Edit Scheme → Test → Arguments**. Disable **Use the Run action's arguments and environment variables** if necessary. Add and enable `PERSONALOS_AUTHORIZATION_SMOKE_TEST` with value `1`. Leave `PERSONALOS_SYNTHETIC_HEALTH_TESTS` unset or disabled.
-3. Start Metro if the Debug host needs it. In the Test navigator, expand **PersonalOSTests → MedicationNativeTests** and run only **testAuthorizationPresenterSmoke** using its individual run control. Keep the host app foregrounded.
-4. Manually confirm Apple's medication-selection sheet appears, then cancel within 120 seconds without selecting medications. Confirm the sheet dismisses and the app returns. No synthetic records or medication selection are required. Successful completion is also accepted, but completing selection could change Health access permissions, even though this test makes no Health-record or application-storage writes.
-5. Inspect the test report: a passing run records either **Authorization flow cancelled as expected** or **Authorization flow completed; access not checked**. These activities contain only fixed outcome labels. Only the presenter's explicit `authorization-cancelled` result counts as cancellation; Apple's false completion maps to `authorization-failed` and fails, as do other errors, duplicate callbacks and timeouts. Missing opt-in or iOS below 26 skips rather than passes.
-6. Disable the smoke-test environment flag after the run. If the test times out with the sheet still open, dismiss it and stop the test host before retrying.
-
-The callback is delivered after the production presenter dismisses its host. The automated assertion checks that callback's outcome; it does not independently prove that the system sheet was visible, so the visual observation above is part of this manual smoke check. This test does not validate Health data access, identifier equality or the RN bridge. Native compilation and execution of this new test remain unverified.
+Use the [exact A/B procedure and observation record](../app/HEALTH_HOST_RETENTION_DIAGNOSTIC.md).
+Run only this individual test, keep synthetic Health tests disabled and stay on
+Today. The test does not query Health, inspect records/identifiers, archive data,
+or write Health, inventory, prescription or Keychain data. It requires no
+medication selection or synthetic records and does not validate data access,
+identifier equality or the RN bridge. Native compilation and execution of this
+new comparison remain unverified.
 
 ## Validation performed on Linux
 

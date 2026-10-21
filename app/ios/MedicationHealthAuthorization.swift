@@ -11,6 +11,98 @@ final class MedicationHealthAuthorization {
   private var host: UIViewController?
   private var finishing = false
 
+  #if DEBUG && NATIVE_XCTEST
+  enum HostRetentionArm: String { case immediate = "A", retained = "B" }
+
+  private final class HostRetentionDiagnostic {
+    let arm: HostRetentionArm
+    let onCallback: (Result<Void, MedicationHealthError>) -> Void
+    let onObservationEnded: (Bool) -> Void
+    var callbackReceived = false
+    var cleanupAllowed = false
+    var observation: DispatchWorkItem?
+
+    init(arm: HostRetentionArm,
+         onCallback: @escaping (Result<Void, MedicationHealthError>) -> Void,
+         onObservationEnded: @escaping (Bool) -> Void) {
+      self.arm = arm
+      self.onCallback = onCallback
+      self.onObservationEnded = onObservationEnded
+    }
+  }
+  private var hostRetentionDiagnostic: HostRetentionDiagnostic?
+  var hasHostForDiagnostic: Bool { host != nil }
+
+  // Only the explicitly opted-in native test can install this per-run hook.
+  func beginHostRetentionDiagnostic(arm: HostRetentionArm,
+                                    onCallback: @escaping (Result<Void, MedicationHealthError>) -> Void,
+                                    onObservationEnded: @escaping (Bool) -> Void) -> Bool {
+    let environment = ProcessInfo.processInfo.environment
+    guard environment["PERSONALOS_AUTHORIZATION_SMOKE_TEST"] == "1",
+          environment["PERSONALOS_AUTHORIZATION_HOST_RETENTION"] == arm.rawValue,
+          host == nil, !finishing, hostRetentionDiagnostic == nil else { return false }
+    hostRetentionDiagnostic = HostRetentionDiagnostic(arm: arm, onCallback: onCallback,
+      onObservationEnded: onObservationEnded)
+    Self.trace(arm == .immediate ? "comparison.armA" : "comparison.armB")
+    return true
+  }
+
+  // XCTest teardown also uses this on timeout/failure. Invalidate late callbacks
+  // and the timer before dismissing; never manufacture a Health callback result.
+  func endHostRetentionDiagnostic(completion: @escaping () -> Void) {
+    guard let diagnostic = hostRetentionDiagnostic else { completion(); return }
+    diagnostic.observation?.cancel()
+    hostRetentionDiagnostic = nil
+    guard let controller = host else {
+      Self.trace("comparison.cleanup.complete")
+      completion()
+      return
+    }
+    Self.trace("comparison.cleanup.fallback")
+    let release = {
+      if self.host === controller {
+        self.host = nil
+        self.finishing = false
+      }
+      Self.trace("comparison.cleanup.complete")
+      completion()
+    }
+    if controller.presentingViewController == nil && !controller.isBeingPresented {
+      release() // A detached host has nothing left for UIKit to dismiss.
+    } else {
+      controller.dismiss(animated: false, completion: release)
+    }
+  }
+
+  private func deferDiagnosticCleanup(_ result: Result<Void, MedicationHealthError>,
+                                      completion: @escaping (Result<Void, MedicationHealthError>) -> Void) -> Bool {
+    guard let diagnostic = hostRetentionDiagnostic, !diagnostic.cleanupAllowed else { return false }
+    guard !diagnostic.callbackReceived else {
+      Self.trace("comparison.additionalCallback.ignored")
+      return true // Log every result, but never restart the window or deliver twice.
+    }
+    guard let controller = host, !finishing else { return false }
+    diagnostic.callbackReceived = true
+    diagnostic.onCallback(result)
+    let deadline = DispatchTime.now() + 10
+    Self.trace("comparison.observation.begin")
+    // A must not retain the controller through this timer's capture either.
+    let observation = DispatchWorkItem { [weak self, weak diagnostic, weak controller] in
+      guard let self, let diagnostic, self.hostRetentionDiagnostic === diagnostic else { return }
+      let retained = controller != nil && self.host === controller
+      Self.trace(retained ? "comparison.observation.end.hostRetained" : "comparison.observation.end.hostReleased")
+      diagnostic.onObservationEnded(retained)
+      if diagnostic.arm == .retained {
+        diagnostic.cleanupAllowed = true
+        self.finish(result, completion: completion)
+      }
+    }
+    diagnostic.observation = observation
+    DispatchQueue.main.asyncAfter(deadline: deadline, execute: observation)
+    return diagnostic.arm == .retained
+  }
+  #endif
+
   func requestAccess(completion: @escaping (Result<Void, MedicationHealthError>) -> Void) {
     #if DEBUG && NATIVE_XCTEST
     Self.trace("request.enter")
@@ -42,8 +134,18 @@ final class MedicationHealthAuthorization {
     }
     #endif
     let readiness = AuthorizationReadiness()
+    #if DEBUG && NATIVE_XCTEST
+    let requestDiagnostic = hostRetentionDiagnostic
+    #endif
     let view = MedicationAuthorizationView(readiness: readiness) { result in
       DispatchQueue.main.async {
+        #if DEBUG && NATIVE_XCTEST
+        if let requestDiagnostic, self.hostRetentionDiagnostic !== requestDiagnostic {
+          _ = Self.sanitized(result)
+          Self.trace("comparison.lateCallback.ignored")
+          return
+        }
+        #endif
         self.finish(Self.sanitized(result), completion: completion)
       }
     }
@@ -92,9 +194,21 @@ final class MedicationHealthAuthorization {
 
   private func finish(_ result: Result<Void, MedicationHealthError>,
                       completion: @escaping (Result<Void, MedicationHealthError>) -> Void) {
+    #if DEBUG && NATIVE_XCTEST
+    if deferDiagnosticCleanup(result, completion: completion) { return }
+    #endif
     guard let controller = host, !finishing else { return }
     finishing = true
+    #if DEBUG && NATIVE_XCTEST
+    let finishingDiagnostic = hostRetentionDiagnostic
+    #endif
     controller.dismiss(animated: false) {
+      #if DEBUG && NATIVE_XCTEST
+      if let finishingDiagnostic, self.hostRetentionDiagnostic !== finishingDiagnostic {
+        Self.trace("comparison.lateDelivery.ignored")
+        return
+      }
+      #endif
       self.host = nil
       self.finishing = false
       #if DEBUG && NATIVE_XCTEST
@@ -138,7 +252,7 @@ final class MedicationHealthAuthorization {
   private nonisolated static func trace(_ event: StaticString,
                                         windowCount: Int? = nil,
                                         healthErrorCode: Int? = nil) {
-    var line = "[MedicationAuthorizationOriginalDiagnostic] \(event) main=\(Thread.isMainThread)"
+    var line = "[MedicationAuthorizationOriginalDiagnostic] \(event) main=\(Thread.isMainThread) uptime=\(ProcessInfo.processInfo.systemUptime)"
     if let windowCount { line += " windowCount=\(windowCount)" }
     if let healthErrorCode { line += " healthErrorCode=\(healthErrorCode)" }
     print(line)

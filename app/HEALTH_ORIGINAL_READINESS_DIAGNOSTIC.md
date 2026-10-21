@@ -1,5 +1,17 @@
 # Original authorization presenter: test-context readiness
 
+**Device result at `4ab5b66`: automated callback/cleanup PASS in 0.565 seconds;
+visibility UNVERIFIED; presentation acceptance UNMET.** The reported trace was
+`request.enter main=true`, `result.successTrue main=true`, then
+`caller.deliver.afterDismissal main=true`. A brief unidentified screen appeared,
+too briefly to identify. Apple's medication-selection sheet was NOT confirmed.
+Neither a confirmed sheet nor confirmed absence during that flash is established.
+
+The text below records the `4ab5b66` baseline implementation and procedure.
+For the current diagnostic branch use the
+[controlled host-retention A/B procedure](HEALTH_HOST_RETENTION_DIAGNOSTIC.md),
+which adds equal post-callback observation windows and requires an arm selection.
+
 Base: `19f30ff1e89fbcd905199db101e5286f9fe8956d`. Its reported 0.110-second
 failure was `context.presenterBeingPresented` followed by
 `caller.deliver.contextRejected`, before host creation. It did not exercise
