@@ -18,8 +18,20 @@ final class MedicationHealthModule: NSObject {
   }
   @objc(requestMedicationAccess:rejecter:)
   func requestMedicationAccess(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    #if DEBUG
+    MedicationHealthAuthorization.trace("bridge.request")
+    #endif
     DispatchQueue.main.async {
+      #if DEBUG
+      MedicationHealthAuthorization.trace("bridge.main")
+      #endif
       MedicationHealthAuthorization.shared.requestAccess { result in
+        #if DEBUG
+        switch result {
+        case .success: MedicationHealthAuthorization.trace("bridge.resolve")
+        case .failure(let error): MedicationHealthAuthorization.trace("bridge.reject \(error.rawValue)")
+        }
+        #endif
         self.finish(result.map { NSNull() }, resolve, reject)
       }
     }

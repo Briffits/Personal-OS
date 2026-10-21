@@ -27,7 +27,7 @@ Apple declaration sources:
 - `validateConceptReference(reference)` → true or error.
 - `compareConceptReferences(left, right)` → native semantic equality or error.
 
-`MedicationHealthModule` dispatches presentation to the main thread. `MedicationHealthAuthorization` finds the sole foreground key window and its top presented controller, then presents a transparent, over-full-screen `UIHostingController` without animation or app controls. After UIKit presentation completes, a readiness signal changes the SwiftUI `@State` trigger once. Only Apple's medication-selection sheet is visible. Completion dismisses the host and releases the in-flight guard before settling the promise. The reader is query-only. The Objective-C bridge selectors and TypeScript promise contract are unchanged.
+`MedicationHealthModule` dispatches presentation to the main thread. `MedicationHealthAuthorization` finds the sole foreground key window and its top presented controller, then presents a transparent, over-full-screen `UIHostingController` without animation or app controls. After UIKit presentation completes, a readiness signal changes the SwiftUI `@State` trigger once. The host is intended to leave only Apple's medication-selection sheet visible; the normal Run result below did not show that sheet. Completion dismisses the host and releases the in-flight guard before settling the promise. The reader is query-only. The Objective-C bridge selectors and TypeScript promise contract are unchanged.
 
 Concurrent requests, missing/ambiguous foreground presentation contexts and active UIKit transitions fail with `authorization-failed`; they are never queued for later prompting. Unsupported OS/Health availability returns `health-unavailable`. Apple's `.success(true)` means request completion only; `.success(false)` maps to `authorization-failed`, without inventing a cancellation or denial distinction. Only `HKError.errorUserCanceled` maps to `authorization-cancelled`; other errors map to `authorization-failed`, without raw error details. No startup, query or background code initiates authorization.
 
@@ -84,9 +84,57 @@ The callback is delivered after the production presenter dismisses its host. The
 
 These are user-reported results, not a new run in this workspace. The exact completion activity was not supplied: the test accepts either successful flow completion or explicit `authorization-cancelled`, so the observed cancellation must not be used to infer which callback result occurred.
 
+## Normal Xcode Run result at `8fd5165` — presentation not accepted
+
+User-reported result on **iPhone 13 Pro, iOS 27.0.1**, running normally through **Xcode Run**:
+
+- The user tapped **Request Apple Health medication access**.
+- **No Apple selection sheet appeared.**
+- The UI displayed **“Access request finished. Access has not been checked.”**
+- The user **did not cancel or select anything**. This was not a cancellation test result.
+- The earlier direct native presenter smoke test displayed the sheet and passed, as recorded above. That result remains separate from this RN run.
+
+| Acceptance check | Status |
+| --- | --- |
+| Earlier direct native presenter smoke test | User-reported pass with visible sheet; limitations above still apply |
+| Normal app RN-to-native visible presentation | **Not passed: no sheet observed at `8fd5165`** |
+| Normal app cancellation, dismissal and continued usability | **Not passed / not exercised: no sheet to cancel** |
+| Promise settlement through RN | Success notice observed; lifecycle trace still needed |
+| Health data access / identity validation | Unverified; no queries authorized for this investigation |
+
+The current Run's exact SDK, local build configuration differences, callback timing and runtime hierarchy were not supplied. Do not infer them from the earlier Test run.
+
+### Source trace and comparison
+
+1. `MedicationScreen.requestHealthAccess()` blocks duplicate/busy/editor interactions, sets transient busy state and awaits `NativeMedicationHealth.requestMedicationAccess()`. Only the resolved branch sets the reported notice; `finally` clears busy state. It does not query Health, reload storage or mutate inventory.
+2. The TypeScript adapter awaits `NativeModules.MedicationHealth.requestMedicationAccess()` with sanitized rejection mapping. `MedicationHealthBridge.m` exports `requestMedicationAccess:rejecter:`; `MedicationHealthModule` dispatches to `DispatchQueue.main.async`. `requiresMainQueueSetup() == false` concerns module initialization, not presentation execution.
+3. The main-actor presenter requires no retained host, exactly one key window in foreground-active scenes, an attached controller and no presentation/dismissal/transition in progress. It starts at that window's root and walks `presentedViewController`; it does not explicitly descend navigation/tab children. `SceneDelegate` supplies the RN window. The actual selected hierarchy in the failing run is unknown. Guard failure rejects, so cannot itself account for the success notice.
+4. It retains a transparent `.overFullScreen` `UIHostingController` in the singleton's `host`. After nonanimated UIKit presentation completes, `readiness.ready` becomes true. SwiftUI `.onReceive` changes a local `@State` trigger from false to true once, driving `healthDataAccessRequest` with `userAnnotatedMedicationType()` and nil predicate. This waits for UIKit completion but does not independently prove SwiftUI's modifier observed the transition or that Apple's sheet became visible.
+5. The modifier's callback is dispatched back to main. Only `.success(true)` sanitizes to success; false and errors reject (only `errorUserCanceled` maps to cancellation). `finish` dismisses the retained host, clears `host`/`finishing` in the dismissal completion, then the module resolves `NSNull()` and JS displays the notice. There is **no visibility or user-interaction requirement in this success path**. A successful callback without visible presentation therefore reaches JS exactly as reported. Why Apple supplied that callback is not established by the UI text alone. Missing trigger/callback would instead normally leave this promise pending; this is not evidence for a timeout or fabricated JS success.
+6. `testAuthorizationPresenterSmoke()` calls the same presenter directly on `@MainActor`, from the hosted XCTest bundle (which compiles the presenter source itself). It bypasses the UI, JS adapter, Objective-C bridge and module dispatch. It awaits an expectation for up to 120 seconds; the app path has no equivalent timeout. Both use the same selection/readiness/retention/dismissal logic, but test launch timing, active hierarchy and compiled singleton instance are not evidence of the normal app's runtime context. The test accepts success or explicit cancellation and does not assert sheet visibility. Earlier visual observation is additional evidence only for that earlier run. Test teardown may end its host; normal Run has no such expected teardown. Neither path intentionally releases the host before the callback.
+
+### Official Apple permission-state evidence
+
+Reviewed Apple's [per-object SwiftUI authorization documentation](https://developer.apple.com/documentation/swiftui/view/healthdataaccessrequest(store:objecttype:predicate:trigger:completion:)) and its official DocC content. It states: **“The system always asks for permission, regardless of whether the user previously granted it.”** The trigger must be State; changing it requests access, and completion may arrive on an arbitrary background queue. The implementation's main-queue hop handles that documented callback threading.
+
+Apple's [type-wide readTypes overload](https://developer.apple.com/documentation/swiftui/view/healthdataaccessrequest(store:readtypes:trigger:completion:)) separately documents no-prompt completion when all requested types already have decisions. That is a different overload and cannot establish the cause for this per-object medication request. [WWDC25's medication example](https://developer.apple.com/videos/play/wwdc2025/321/) uses the per-object modifier and State trigger for medication selection. Existing permission state is **not an established explanation**; neither permission reset nor Health queries are needed or authorized for this diagnosis.
+
+### Debug-only lifecycle reproduction
+
+No behavioral fix is made: the cause is not established. Diagnostics in the existing authorization presenter and RN module are compiled only with `DEBUG`. They emit the `[MedicationAuthorization]` prefix, monotonic uptime, main-thread flag, fixed event/outcome labels, success Boolean, foreground key-window count and controller lifecycle flags. No Health records, identifiers, object descriptions, raw errors or personal data are emitted. `host.released` means the presenter's strong reference was cleared, not proof of object deallocation. Host attachment and SwiftUI appearance are **not** proof Apple's sheet was visible.
+
+1. Build this diagnostic revision in **Debug** on the same iPhone using the same app identity and existing installation. Record commit, Xcode/SDK/iOS versions and any local configuration changes. Do not uninstall, reset permissions, change Health settings or add/select medications. Use the already-initialized v2 collection; do not initialize or migrate it for this check.
+2. In **Scheme → Run**, disable both `PERSONALOS_AUTHORIZATION_SMOKE_TEST` and `PERSONALOS_SYNTHETIC_HEALTH_TESTS`. Start Metro if required. Launch with **Product → Run**, keep the device unlocked and foregrounded, and open **Library → Medication**. Wait for loading/navigation to finish.
+3. Clear/filter the Xcode console to `[MedicationAuthorization]`, then tap **Request Apple Health medication access** exactly once. Observe whether Apple's sheet actually appears. If it appears, cancel without selecting anything. If none appears, record **no sheet, no user interaction** and the exact UI outcome. Do not relabel it cancellation. Keep the app running.
+4. Capture only the filtered lifecycle lines. Expected causal milestones are `bridge.request` → `bridge.main` → `presenter.request` / foreground-window count → `presenter.selected` / `host.retained` → `host.presentationCompleted` → readiness true / trigger true → `swiftui.completion` → `completion.main` → dismissal → host release → `bridge.resolve` or sanitized `bridge.reject`. SwiftUI appearance/readiness-false logs may interleave. The completion log records its actual thread before the main hop. Compare monotonic times, attachment/key/foreground flags, presenter root/presented flags and transition flags. A callback before trigger/presentation completion or before visible UI warrants investigation; do not add arbitrary delays based only on suspicion.
+5. Check controls become usable; navigate Back to Library and Today without edits. Return to Medication and repeat once while settled, recording the second attempt separately. Confirm no automatic re-prompt or stuck transparent host; check VoiceOver focus if available. No query, link/unlink, stock edit, permission inspection API or persistence operation should be added to this handler.
+6. For a controlled comparison, run **only** `testAuthorizationPresenterSmoke` with its Test opt-in enabled and the synthetic opt-in disabled, on the same diagnostic build/configuration. Verify the test target inherits `DEBUG` so the presenter emits logs. Cancel only if a sheet appears. Record visual observation separately from the accepted callback label; compare presenter/SwiftUI timing and flags with Run. The test bypasses bridge logs by design. Disable the smoke opt-in afterwards. Never run the real-identifier test on this device for this investigation.
+
+A reproduced success callback after a valid host/trigger with no visible sheet would narrow investigation to SwiftUI/HealthKit presentation/completion behavior; it would still not prove a permissions cause. A different hierarchy, lost attachment or early callback would provide a concrete lead. These logs alone cannot observe Apple's private presentation internals.
+
 ## Product UI implementation and cancellation check
 
-The access-only control and focused tests are now implemented. Tests cover completion, cancellation, failure, unavailable Health, retry, same-tick duplicate prevention, unmount and absence of queries/writes. The existing screen busy guard blocks overlapping actions until settlement; `finally` restores interaction. Device acceptance remains pending. Use **Request Apple Health medication access** in the procedure below, with an already-initialized v2 collection. The following proposal records the inspection and rationale before this implementation; its statements about missing UI are historical.
+The access-only control and focused tests are now implemented. Tests cover completion, cancellation, failure, unavailable Health, retry, same-tick duplicate prevention, unmount and absence of queries/writes. The existing screen busy guard blocks overlapping actions until settlement; `finally` restores interaction. Device acceptance is not passed; the normal Run result and diagnostic procedure are recorded above. Use **Request Apple Health medication access** in the procedure below, with an already-initialized v2 collection. The following proposal records the inspection and rationale before this implementation; its statements about missing UI are historical.
 
 Source inspection shows this path exists but has no production UI caller:
 
@@ -107,7 +155,15 @@ Manual acceptance check once that product action exists:
 
 This checks RN-to-native presentation, settlement, dismissal and continued usability only. Health data access and identifier equality remain separate validation gates on the dedicated synthetic store. It requires no temporary global exposure or debug screen, and no new interface has been implemented in this documentation change.
 
-## Validation performed on Linux
+## Checks for this diagnostic change
+
+- Focused Jest: `npm test -- --runInBand MedicationScreen NativeMedicationHealth` — **2 suites, 75 tests passed**. Covers access-only UI and adapter contracts, not UIKit/SwiftUI presentation.
+- TypeScript `tsc --noEmit`, ESLint `npm run lint`, and `git diff --check` — passed.
+- Source/diff review: diagnostics are `#if DEBUG` only; no Health queries, permission resets, new dependencies or behavioral fix. No personal data or raw errors added to logs.
+- Native compilation and device reproduction **not run**: this Linux workspace has neither Swift compiler nor Xcode/Apple SDK. Debug and Release builds, the controlled device Run/Test comparison and real sheet visibility remain required. Logging can affect timing; a changed result with diagnostics alone is not proof of a fix.
+- Pre-commit review: all diagnostic code is gated by `#if DEBUG`; removing those blocks leaves the original Swift code unchanged apart from whitespace. Logs contain only lifecycle/timing flags and fixed sanitized outcomes, with the consistent `[MedicationAuthorization]` prefix. No Health data, medication identifiers, credentials or personal data are logged. Authorization logic is unchanged; diagnostic logging can affect timing. Only the two diagnostic Swift files and this document are included in the requested commit; no push or merge.
+
+## Earlier validation performed on Linux
 
 - Complete Jest suite: **15 suites, 388 tests passed**.
 - TypeScript `tsc --noEmit`: passed.
@@ -146,7 +202,7 @@ In Xcode, open `app/ios/PersonalOS.xcworkspace`, select the PersonalOS scheme an
 
 Repeat with cancellation and with fewer than two selected medications: cancellation should yield a sanitized authorization error when Apple reports one; fewer than two readable medications should fail the explicit count assertion, never be treated as successful access. These are intentional negative runs, not passing identity validations. Restore both selections and rerun for a passing result. Review all native unit tests, including `testAuthorizationCompletionMapping`. Linux Jest cannot validate SwiftUI presentation.
 
-For the next RN cancellation check, use the proposed product-UI acceptance procedure above. The former temporary `App.tsx` global/DevTools harness is superseded; querying Health records is outside that check. Broader data-access checks below remain separate.
+For the next RN check, use the Debug lifecycle procedure above; cancellation acceptance requires a visibly presented sheet. The former temporary `App.tsx` global/DevTools harness is superseded; querying Health records is outside that check. Broader data-access checks below remain separate.
 
 On a dedicated iPhone/test store, exercise user-initiated authorization, cancellation, denial/partial access, newly shared medications, readable archived items, fractional taken doses, skipped/unknown data where supported, edited/deleted/backdated dose snapshots, exact interval boundaries and malformed identity. Verify no write permission is requested. Check that all APIs compile with the actual installed SDK; adjust any SDK signature discrepancy before approval of native validation. Also run the existing standalone MedicationKeychain and PrescriptionDocumentStorage tests and the normal in-place upgrade/manual-stock smoke tests.
 

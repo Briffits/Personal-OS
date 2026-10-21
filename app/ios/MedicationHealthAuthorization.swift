@@ -12,7 +12,13 @@ final class MedicationHealthAuthorization {
   private var finishing = false
 
   func requestAccess(completion: @escaping (Result<Void, MedicationHealthError>) -> Void) {
+    #if DEBUG
+    Self.trace("presenter.request hostRetained=\(host != nil) finishing=\(finishing)")
+    #endif
     guard #available(iOS 26.0, *), HKHealthStore.isHealthDataAvailable() else {
+      #if DEBUG
+      Self.trace("presenter.unavailable")
+      #endif
       completion(.failure(.unavailable)); return
     }
     // Never queue a prompt to appear later without the initiating user action.
@@ -20,11 +26,23 @@ final class MedicationHealthAuthorization {
           presenter.viewIfLoaded?.window != nil,
           !presenter.isBeingPresented, !presenter.isBeingDismissed,
           presenter.transitionCoordinator == nil else {
+      #if DEBUG
+      Self.trace("presenter.contextRejected")
+      #endif
       completion(.failure(.authorizationFailed)); return
     }
     let readiness = AuthorizationReadiness()
     let view = MedicationAuthorizationView(readiness: readiness) { result in
+      #if DEBUG
+      switch result {
+      case .success(let completed): Self.trace("swiftui.completion success=\(completed)")
+      case .failure: Self.trace("swiftui.completion failure")
+      }
+      #endif
       DispatchQueue.main.async {
+        #if DEBUG
+        Self.traceContext("completion.main", self.host)
+        #endif
         self.finish(Self.sanitized(result), completion: completion)
       }
     }
@@ -35,7 +53,16 @@ final class MedicationHealthAuthorization {
     host = controller
     finishing = false
     // Change SwiftUI's State trigger only after UIKit finishes presentation.
-    presenter.present(controller, animated: false) { readiness.ready = true }
+    #if DEBUG
+    Self.traceContext("presenter.selected", presenter)
+    Self.traceContext("host.retained", controller)
+    #endif
+    presenter.present(controller, animated: false) {
+      #if DEBUG
+      Self.traceContext("host.presentationCompleted", controller)
+      #endif
+      readiness.ready = true
+    }
   }
 
   nonisolated static func sanitized(_ result: Result<Bool, Error>) -> Result<Void, MedicationHealthError> {
@@ -52,11 +79,21 @@ final class MedicationHealthAuthorization {
 
   private func finish(_ result: Result<Void, MedicationHealthError>,
                       completion: @escaping (Result<Void, MedicationHealthError>) -> Void) {
+    #if DEBUG
+    Self.trace("finish.enter hostRetained=\(host != nil) finishing=\(finishing)")
+    #endif
     guard let controller = host, !finishing else { return }
     finishing = true
+    #if DEBUG
+    Self.traceContext("host.dismissRequested", controller)
+    #endif
     controller.dismiss(animated: false) {
       self.host = nil
       self.finishing = false
+      #if DEBUG
+      Self.traceContext("host.dismissCompleted", controller)
+      Self.trace("host.released completion.delivered")
+      #endif
       completion(result)
     }
   }
@@ -67,11 +104,32 @@ final class MedicationHealthAuthorization {
       .filter { $0.activationState == .foregroundActive }
       .flatMap { $0.windows }
       .filter { $0.isKeyWindow }
+    #if DEBUG
+    Self.trace("presenter.foregroundKeyWindows=\(windows.count)")
+    #endif
     // Do not select an arbitrary scene if more than one is active.
     guard windows.count == 1, var controller = windows.first?.rootViewController else { return nil }
     while let presented = controller.presentedViewController { controller = presented }
     return controller
   }
+
+  #if DEBUG
+  // Only lifecycle flags and monotonic timing. Never pass objects, error text,
+  // Health values, window/scene identifiers, or controller descriptions here.
+  nonisolated static func trace(_ event: String) {
+    print("[MedicationAuthorization] uptime=\(ProcessInfo.processInfo.systemUptime) main=\(Thread.isMainThread) \(event)")
+  }
+
+  private static func traceContext(_ event: String, _ controller: UIViewController?) {
+    let window = controller?.viewIfLoaded?.window
+    trace("\(event) attached=\(window != nil) key=\(window?.isKeyWindow == true)"
+      + " foreground=\(window?.windowScene?.activationState == .foregroundActive)"
+      + " root=\(controller != nil && controller === window?.rootViewController)"
+      + " presenting=\(controller?.presentingViewController != nil) presented=\(controller?.presentedViewController != nil)"
+      + " transition=\(controller?.transitionCoordinator != nil)"
+      + " appearing=\(controller?.isBeingPresented == true) dismissing=\(controller?.isBeingDismissed == true)")
+  }
+  #endif
 }
 
 @MainActor
@@ -97,8 +155,18 @@ private struct MedicationAuthorizationView: View {
         trigger: trigger,
         completion: completion
       )
+      #if DEBUG
+      .onAppear { MedicationHealthAuthorization.trace("swiftui.appear") }
+      .onDisappear { MedicationHealthAuthorization.trace("swiftui.disappear") }
+      #endif
       .onReceive(readiness.$ready) { ready in
+        #if DEBUG
+        MedicationHealthAuthorization.trace("swiftui.readiness ready=\(ready) trigger=\(trigger)")
+        #endif
         if ready && !trigger { trigger = true }
+        #if DEBUG
+        MedicationHealthAuthorization.trace("swiftui.trigger=\(trigger)")
+        #endif
       }
   }
 }
