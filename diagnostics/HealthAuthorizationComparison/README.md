@@ -266,3 +266,79 @@ normal RN path would still require its own acceptance after any eventual fix.
   permissions UI, cleanup, VoiceOver and Dynamic Type remain pending.**
 - The Mac sequence above is the acceptance procedure. Do not run the product's
   broader Health integration or real-identifier tests for this comparison.
+
+## D: direct per-object API follow-up (Debug only)
+
+S1 → M1 → M2 → S2 observations and source review are preserved uncommitted in
+[reports/native-comparison-review](reports/native-comparison-review/REVIEW.md).
+Only S1 visibly presented; subsequent S and M attempts returned quickly without
+presentation. This does not establish a modal-specific failure or read access.
+
+D adds an explicit `PERSONALOS_NATIVE_HEALTH_PATH=D` Debug-only opt-in. Release
+remains inert. Missing or invalid opt-in remains inert. S and M request patterns
+are unchanged. D has no Health modifier and makes no request from appearance.
+It uses `HKHealthStore.requestPerObjectReadAuthorization` for
+`.userAnnotatedMedicationType()` with `predicate: nil`, only after tapping
+**D: Request Apple medication-selection sheet once** on the interactive screen.
+No query, permission-status probe, storage, networking or Health write is added.
+
+The manual tap consumes the process's sole attempt, including unavailable Health
+or failed context. D waits at most 10 seconds for settled foreground context,
+then starts the existing 120-second callback bound and 10-second post-main-
+callback observation. Backgrounding interrupts the attempt with no retry. Scene
+inactivity alone is logged. The root/store remain retained; no app modal exists.
+The API has no cancellation token: timeout does not cancel Apple's request.
+A completion closure retains the observer/store until callback delivery, even
+if late; late/duplicate callbacks are logged and cannot restart the observation.
+
+D logs raw callback Bool separately from error domain/code and the existing
+outcome enum, with separate raw/main timing. Domain is a maximum 96-character
+sanitised token; error descriptions/userInfo and Health objects are never logged.
+No-error is `errorDomain=none errorCode=none`. A non-nil error is preserved even
+if the Bool is true. Neither Bool nor error category proves sheet visibility,
+physical cancellation or read access. Record these human observations separately.
+
+Device procedure (no uninstall or permission changes):
+
+1. Build/sign Debug with the existing team and unchanged diagnostic bundle ID;
+   install over the existing diagnostic installation. Do not open PersonalOS.
+2. Wait for observer readiness before a fresh process launch. Explicitly pass
+   `PERSONALOS_NATIVE_HEALTH_PATH=D` to devicectl, do not rely on scheme settings.
+   Use `--terminate-existing --console`, without an attached debugger, and verify
+   `path=D`. Shared scheme opt-in stays disabled; no persistent opt-in is set.
+3. Confirm **Path D**, **No request started**, and a responsive interaction
+   counter. The request must not begin until the user taps the labelled D button.
+4. Tap D once while watching continuously. If Apple's recognizable sheet appears,
+   cancel without changing selections. Observe callback/timeout and the complete
+   10-second window; then test the counter. Record visibility, cancellation,
+   disappearance and interruptions independently of the console.
+5. Stop after this one attempt. On timeout, cancel any visible sheet and stop the
+   diagnostic process. Disable opt-in afterward; no automatic S/M/D follow-up.
+
+Focused checks: run `check_project.py`, compare S root and modal source against
+commit 6304d7c, and build Debug. Release source guards are audited statically;
+physical D timing, denied/unavailable Health, duplicate/late callback and
+accessibility behaviour still require device validation. No read access test.
+
+### Human observation correction after D1
+
+S1 and D1 both displayed Apple’s sheet and the user tapped **Don’t Allow**,
+not Cancel. Each sheet disappeared and the counter responded without reported
+interruption. M1/M2/S2 showed no sheet despite immediate success callbacks.
+The original logs are preserved. Cancellation-based interpretations are withdrawn.
+D1 demonstrates presentation remained possible through the direct API after the
+earlier refusal, but API choice and manual-trigger timing differed; causation
+remains unresolved. A second manual D attempt is proposed for review only.
+Record the actual user action rather than assuming a Cancel control. Historical
+procedure text above describes intended cancellation, not the corrected observed
+actions. Read access remains untested.
+
+### Apple Feedback status
+
+**Reported to Apple; cause unresolved.** User-confirmed submission **FB25287175**,
+dated **22 October 2026**, “Intermittent medication per-object authorization sheet
+presentation across repeated requests”. The reviewed reproduction ZIP and a
+separate Feedback Assistant-required iOS Sysdiagnose were submitted. The latter
+is outside our archive sanitisation review. See
+[submission record](reports/native-comparison-review/APPLE_FEEDBACK_SUBMISSION.md).
+Diagnostic opt-ins remain disabled; no further tests or production changes planned.

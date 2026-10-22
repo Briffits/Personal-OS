@@ -6,6 +6,9 @@ import UIKit
 enum ComparisonPath: String {
   case persistentRoot = "S"
   case retainedModal = "M"
+  #if DEBUG
+  case direct = "D"
+  #endif
 
   static let selected: ComparisonPath? = {
     #if DEBUG
@@ -53,6 +56,66 @@ final class ComparisonObservation: ObservableObject {
   @Published private(set) var status = "No request started."
   @Published private(set) var callbackStatus = "No accepted callback."
   @Published private(set) var cleanupStatus = "Not needed yet."
+
+  #if DEBUG
+  @Published private(set) var directAttempted = false
+  @Published private(set) var directCallbackDetails = "No direct callback."
+  // Kept for the observation lifetime, including timeout. The callback also
+  // retains this observer until delivery; there is no API cancellation token.
+  private let directStore = HKHealthStore()
+
+  func beginDirectRequest() {
+    guard path == .direct, !directAttempted else { return }
+    directAttempted = true
+    guard begin(.direct) else { return }
+    phase = .context
+    status = "Manual D attempt: waiting for settled foreground context (at most 10 seconds)."
+    contextDeadline = ProcessInfo.processInfo.systemUptime + 10
+    DiagnosticTrace.event("direct.button.tap")
+    checkDirectContext()
+  }
+
+  private func checkDirectContext() {
+    guard phase == .context else { return }
+    guard ProcessInfo.processInfo.systemUptime < contextDeadline else {
+      DiagnosticTrace.event("context.timeout")
+      finish("Context prerequisite failed; no direct request issued.", deliver: false)
+      return
+    }
+    if RetainedModalAuthorization.contextIsReady() {
+      DiagnosticTrace.event("context.ready")
+      beginCallbackWait()
+      directStore.requestPerObjectReadAuthorization(
+        for: .userAnnotatedMedicationType(), predicate: nil
+      ) { [self] success, error in
+        let result: Result<Bool, Error> = error.map { .failure($0) } ?? .success(success)
+        let outcome = AuthorizationOutcome(result)
+        // Never log localized descriptions, userInfo or Health objects.
+        // Restrict the domain to a bounded token; preserve the numeric code.
+        let nsError = error as NSError?
+        let domain = nsError.map {
+          String($0.domain.unicodeScalars.prefix(96).map {
+            CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0)
+              ? String($0) : "_"
+          }.joined())
+        } ?? "none"
+        let code = nsError?.code.description ?? "none"
+        let details = "success=\(success) errorDomain=\(domain) errorCode=\(code)"
+        DiagnosticTrace.event("callback.raw", outcome: outcome)
+        print("[NativeHealthComparison] path=D uptime=\(ProcessInfo.processInfo.systemUptime) main=\(Thread.isMainThread) direct.callback \(details)")
+        Task { @MainActor in
+          // Late/duplicate raw callbacks remain logged but cannot overwrite UI.
+          if phase == .requesting { directCallbackDetails = details }
+          receivedCallback(outcome)
+        }
+      }
+      return
+    }
+    let check = DispatchWorkItem { [weak self] in self?.checkDirectContext() }
+    contextCheck = check
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: check)
+  }
+  #endif
 
   private enum Phase { case idle, context, requesting, observing, cleaning, finished }
   private var phase = Phase.idle

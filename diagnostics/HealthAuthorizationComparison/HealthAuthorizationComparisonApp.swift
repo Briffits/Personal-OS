@@ -63,6 +63,19 @@ private struct ComparisonContent: View {
         Text("Health Presentation Diagnostic").font(.title).accessibilityAddTraits(.isHeader)
         Text(observation.path.map { "Path \($0.rawValue)" } ?? "Inert — no path opt-in")
           .font(.headline)
+        #if DEBUG
+        if observation.path == .direct {
+          Text("D — direct per-object API. No request until you tap the button.")
+          Button("D: Request Apple medication-selection sheet once") {
+            observation.beginDirectRequest()
+          }
+          .buttonStyle(.borderedProminent)
+          .frame(minHeight: 44)
+          .disabled(observation.directAttempted)
+          .accessibilityHint("Starts one direct authorization request. Cancel without changing selections.")
+          Text("Direct callback: \(observation.directCallbackDetails)")
+        }
+        #endif
         Text(observation.status)
         Text("Sheet visibility: not verified by this app. Record your observation separately.")
         Text("Manual cancellation: not verified by this app. Record the actual cancellation tap separately.")

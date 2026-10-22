@@ -1,0 +1,24 @@
+[NativeHealthComparison] path=M uptime=52872.431957500005 main=true root.appear
+[NativeHealthComparison] path=M uptime=52872.432072250005 main=true context.wait.begin
+[NativeHealthComparison] path=M uptime=52872.813399625 main=true scene.active
+[NativeHealthComparison] path=M uptime=52872.84905791667 main=true context.ready
+[NativeHealthComparison] path=M uptime=52872.84922154167 main=true request.begin
+[NativeHealthComparison] path=M uptime=52872.85069883334 main=true host.retained
+[NativeHealthComparison] path=M uptime=52872.86576283334 main=true modal.swiftui.appear
+[NativeHealthComparison] path=M uptime=52872.86581791667 main=true modal.readiness.false
+[NativeHealthComparison] path=M uptime=52872.867637958334 main=true host.presentationCompleted
+[NativeHealthComparison] path=M uptime=52872.86783416667 main=true modal.readiness.true
+[NativeHealthComparison] path=M uptime=52872.867868625006 main=true modal.trigger.true
+[NativeHealthComparison] path=M uptime=52872.888499125 main=false callback.raw outcome=successTrue
+[NativeHealthComparison] path=M uptime=52872.888593625 main=true callback.main outcome=successTrue
+[NativeHealthComparison] path=M uptime=52872.888698208335 main=true observation.begin
+[NativeHealthComparison] path=M uptime=52883.37416041667 main=true observation.end.hostRetained
+[NativeHealthComparison] path=M uptime=52883.374546708335 main=true cleanup.begin
+[NativeHealthComparison] path=M uptime=52883.37476979167 main=true host.dismissRequested
+[NativeHealthComparison] path=M uptime=52883.39042391667 main=true host.dismissCompleted
+[NativeHealthComparison] path=M uptime=52883.39049141667 main=true cleanup.complete.hostReleased
+[NativeHealthComparison] path=M uptime=52883.390552375 main=true caller.deliver.afterDismissal outcome=successTrue
+[NativeHealthComparison] path=M uptime=52883.390563375004 main=true run.ended
+[NativeHealthComparison] path=M uptime=52883.390993583336 main=true modal.swiftui.disappear
+[NativeHealthComparison] path=M uptime=52924.199127708336 main=true interaction.tap
+[NativeHealthComparison] path=M uptime=52924.999255500006 main=true interaction.tap

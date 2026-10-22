@@ -1,0 +1,24 @@
+[NativeHealthComparison] path=D uptime=54656.37175804167 main=true root.appear
+[NativeHealthComparison] path=D uptime=54656.589988375 main=true scene.active
+[NativeHealthComparison] path=D uptime=54683.157164125005 main=true scene.inactive
+[NativeHealthComparison] path=D uptime=54683.202627000006 main=true scene.active
+[NativeHealthComparison] path=D uptime=54683.21595766667 main=true scene.background
+[NativeHealthComparison] path=D uptime=54684.95863745834 main=true scene.inactive
+[NativeHealthComparison] path=D uptime=54685.75173458333 main=true scene.active
+[NativeHealthComparison] path=D uptime=54708.653094208334 main=true interaction.tap
+[NativeHealthComparison] path=D uptime=54716.85369425001 main=true direct.button.tap
+[NativeHealthComparison] path=D uptime=54716.85432729167 main=true context.ready
+[NativeHealthComparison] path=D uptime=54716.85439258334 main=true request.begin
+[NativeHealthComparison] path=D uptime=54716.883440708334 main=false callback.raw outcome=successTrue
+[NativeHealthComparison] path=D uptime=54716.88346991667 main=false direct.callback success=true errorDomain=none errorCode=none
+[NativeHealthComparison] path=D uptime=54716.883545625 main=true callback.main outcome=successTrue
+[NativeHealthComparison] path=D uptime=54716.88357895834 main=true observation.begin
+[NativeHealthComparison] path=D uptime=54727.376939375004 main=true observation.end.rootRetained
+[NativeHealthComparison] path=D uptime=54727.377165125006 main=true cleanup.rootRetained
+[NativeHealthComparison] path=D uptime=54727.37719083334 main=true run.ended
+[NativeHealthComparison] path=D uptime=54732.52829170834 main=true interaction.tap
+[NativeHealthComparison] path=D uptime=54784.79393125 main=true scene.inactive
+[NativeHealthComparison] path=D uptime=54784.84966841667 main=true scene.active
+[NativeHealthComparison] path=D uptime=54784.85824004167 main=true scene.background
+[NativeHealthComparison] path=D uptime=54788.03814416667 main=true scene.inactive
+[NativeHealthComparison] path=D uptime=54788.87699266667 main=true scene.active

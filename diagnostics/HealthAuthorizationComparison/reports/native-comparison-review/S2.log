@@ -1,0 +1,21 @@
+[NativeHealthComparison] path=S uptime=53034.76877070834 main=true root.appear
+[NativeHealthComparison] path=S uptime=53034.76880683334 main=true request.begin
+[NativeHealthComparison] path=S uptime=53034.76882320834 main=true root.trigger.true
+[NativeHealthComparison] path=S uptime=53034.80455370834 main=false callback.raw outcome=successTrue
+[NativeHealthComparison] path=S uptime=53034.80458525 main=true callback.main outcome=successTrue
+[NativeHealthComparison] path=S uptime=53034.804613458335 main=true observation.begin
+[NativeHealthComparison] path=S uptime=53035.16391291667 main=true scene.active
+[NativeHealthComparison] path=S uptime=53045.30358641667 main=true observation.end.rootRetained
+[NativeHealthComparison] path=S uptime=53045.30394016667 main=true cleanup.rootRetained
+[NativeHealthComparison] path=S uptime=53045.303976333336 main=true run.ended
+[NativeHealthComparison] path=S uptime=53077.127834708335 main=true interaction.tap
+[NativeHealthComparison] path=S uptime=53077.52730579167 main=true interaction.tap
+[NativeHealthComparison] path=S uptime=53078.67736041667 main=true interaction.tap
+[NativeHealthComparison] path=S uptime=53104.930411625006 main=true scene.inactive
+[NativeHealthComparison] path=S uptime=53104.971279833335 main=true scene.active
+[NativeHealthComparison] path=S uptime=53104.98102033334 main=true scene.background
+[NativeHealthComparison] path=S uptime=53123.42599966667 main=true scene.inactive
+[NativeHealthComparison] path=S uptime=53124.223771000004 main=true scene.active
+[NativeHealthComparison] path=S uptime=53292.716865208335 main=true scene.inactive
+[NativeHealthComparison] path=S uptime=53293.60373304167 main=true scene.background
+[NativeHealthComparison] path=S uptime=53293.6096905 main=true root.disappear

@@ -132,6 +132,24 @@ def check():
     code = re.sub(r"//[^\n]*", "", sources)
     assert not re.search(prohibited, code), "Unexpected query, persistence, networking or alternate authorization API"
     assert code.count(".healthDataAccessRequest(") == 2
+    assert code.count(".requestPerObjectReadAuthorization(") == 1
+    observer = (ROOT / "ComparisonObservation.swift").read_text()
+    direct = observer.split("  func beginDirectRequest()", 1)[1].split("  #endif", 1)[0]
+    assert "guard begin(.direct) else { return }" in direct
+    assert "for: .userAnnotatedMedicationType(), predicate: nil" in direct
+    assert "[self] success, error" in direct
+    assert "if phase == .requesting" in direct
+    assert "direct.callback" in direct and "errorDomain=" in direct and "errorCode=" in direct
+    app = (ROOT / "HealthAuthorizationComparisonApp.swift").read_text()
+    assert app.count("observation.beginDirectRequest()") == 1
+    assert 'Button("D: Request Apple medication-selection sheet once")' in app
+    assert ".disabled(observation.directAttempted)" in app
+    # D activation, request implementation and UI must disappear in Release.
+    def release_only(text):
+        return re.sub(r"  *#if DEBUG\n.*?  *#endif", "", text, flags=re.S)
+    assert "requestPerObjectReadAuthorization" not in release_only(observer)
+    assert 'case direct = "D"' not in release_only(observer)
+    assert "beginDirectRequest" not in release_only(app)
     assert "case .success(true): self = .successTrue" in code
     assert "case .success(false): self = .successFalse" in code
     assert "started = false" in code and code.count("started = false") == 1
