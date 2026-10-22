@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AADA00000000000000000001 /* ReactNativeStartupModules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADA00000000000000000011 /* ReactNativeStartupModules.swift */; };
+		AADA00000000000000000002 /* ReactNativeStartupModules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADA00000000000000000011 /* ReactNativeStartupModules.swift */; };
+		AADA00000000000000000003 /* ReactNativeStartupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADA00000000000000000012 /* ReactNativeStartupTests.swift */; };
 		AACC00000000000000000001 /* MedicationCollectionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000011 /* MedicationCollectionStorage.swift */; };
 		AACC00000000000000000002 /* MedicationKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000012 /* MedicationKeychain.swift */; };
 		AACC00000000000000000003 /* MedicationStorageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000013 /* MedicationStorageModule.swift */; };
@@ -36,6 +39,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AADA00000000000000000011 /* ReactNativeStartupModules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactNativeStartupModules.swift; sourceTree = "<group>"; };
+		AADA00000000000000000012 /* ReactNativeStartupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tests/ReactNativeStartupTests.swift; sourceTree = "<group>"; };
 		AACC00000000000000000011 /* MedicationCollectionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationCollectionStorage.swift; sourceTree = "<group>"; };
 		AACC00000000000000000012 /* MedicationKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationKeychain.swift; sourceTree = "<group>"; };
 		AACC00000000000000000013 /* MedicationStorageModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationStorageModule.swift; sourceTree = "<group>"; };
@@ -111,6 +116,8 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				AADA00000000000000000011 /* ReactNativeStartupModules.swift */,
+				AADA00000000000000000012 /* ReactNativeStartupTests.swift */,
 				AAD20000000000000000006C,
 				AAD20000000000000000006B,
 				AAD20000000000000000006A,
@@ -322,6 +329,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AADA00000000000000000001 /* ReactNativeStartupModules.swift in Sources */,
 				AAD2000000000000000000CD,
 				AAD2000000000000000000CC,
 				AAD2000000000000000000CB,
@@ -340,7 +348,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AAD20000000000000000012D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AAD200000000000000000190, AAD200000000000000000191, AAD200000000000000000192, AAD200000000000000000193, AAD200000000000000000194, AAD200000000000000000195, AAD200000000000000000196,); runOnlyForDeploymentPostprocessing = 0; };
+		AAD20000000000000000012D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AADA00000000000000000002, AADA00000000000000000003, AAD200000000000000000190, AAD200000000000000000191, AAD200000000000000000192, AAD200000000000000000193, AAD200000000000000000194, AAD200000000000000000195, AAD200000000000000000196,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
