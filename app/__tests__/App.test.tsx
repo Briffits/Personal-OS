@@ -8,6 +8,10 @@ import App from '../App';
 import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
 import {
+  MedicationHealthError,
+  NativeMedicationHealth,
+} from '../src/native/NativeMedicationHealth';
+import {
   firstId,
   prescriptionId,
   medicationFixture,
@@ -34,10 +38,25 @@ jest.mock('../src/native/NativePrescriptionDocuments', () => ({
     open: jest.fn(),
   },
 }));
+jest.mock('../src/native/NativeMedicationHealth', () => ({
+  ...jest.requireActual('../src/native/NativeMedicationHealth'),
+  NativeMedicationHealth: {
+    requestMedicationAccess: jest.fn(),
+    availability: jest.fn(),
+    listMedications: jest.fn(),
+    readDoseSnapshot: jest.fn(),
+    validateConceptReference: jest.fn(),
+    compareConceptReferences: jest.fn(),
+  },
+}));
 let screen: ReactTestRenderer.ReactTestRenderer;
 let fixture: ReturnType<typeof medicationFixture>;
 beforeEach(async () => {
   jest.clearAllMocks();
+  jest
+    .mocked(NativeMedicationHealth.requestMedicationAccess)
+    .mockReset()
+    .mockResolvedValue(undefined);
   fixture = medicationFixture();
   jest.mocked(NativeMedicationStorage.read).mockImplementation(fixture.read);
   jest
@@ -205,3 +224,174 @@ test.each(['light', 'dark'] as const)(
     ).toBe(true);
   },
 );
+
+const diagnosticAction = 'Diagnostic: request Apple Health medication access';
+function diagnosticButton() {
+  return screen.root.findByProps({ accessibilityLabel: diagnosticAction });
+}
+function expectNoDiagnosticDataOperations() {
+  for (const [name, operation] of Object.entries(NativeMedicationHealth)) {
+    if (name !== 'requestMedicationAccess') {
+      expect(operation).not.toHaveBeenCalled();
+    }
+  }
+  for (const operation of Object.values(NativeMedicationStorage)) {
+    expect(operation).not.toHaveBeenCalled();
+  }
+  for (const operation of Object.values(NativePrescriptionDocuments)) {
+    expect(operation).not.toHaveBeenCalled();
+  }
+}
+
+test('diagnostic is Today-only and startup/navigation never requests access or opens storage', async () => {
+  expect(diagnosticButton().props.disabled).toBe(false);
+  for (const tab of ['Ask', 'Capture', 'Library']) {
+    await press(tab + ' tab');
+    absent(diagnosticAction);
+  }
+  await press('Today tab');
+  expect(diagnosticButton().props.disabled).toBe(false);
+  expect(NativeMedicationHealth.requestMedicationAccess).not.toHaveBeenCalled();
+  expectNoDiagnosticDataOperations();
+});
+
+test('diagnostic is absent outside development mode and an old handler cannot request', async () => {
+  const request = diagnosticButton().props.onPress;
+  const previousDev = __DEV__;
+  try {
+    Object.defineProperty(globalThis, '__DEV__', {
+      value: false,
+      configurable: true,
+      writable: true,
+    });
+    await act(async () => screen.update(<App />));
+    absent(diagnosticAction);
+    await act(async () => request());
+    expect(
+      NativeMedicationHealth.requestMedicationAccess,
+    ).not.toHaveBeenCalled();
+    expectNoDiagnosticDataOperations();
+  } finally {
+    Object.defineProperty(globalThis, '__DEV__', {
+      value: previousDev,
+      configurable: true,
+      writable: true,
+    });
+  }
+});
+
+test.each([
+  [
+    undefined,
+    'Request completed. Sheet appearance and read access are not verified.',
+  ],
+  [
+    new MedicationHealthError('authorization-cancelled'),
+    'Request reported cancellation. Sheet appearance and read access are not verified.',
+  ],
+  [
+    new MedicationHealthError('health-unavailable'),
+    'Apple Health medication access is unavailable. Read access has not been checked.',
+  ],
+  [
+    new MedicationHealthError('authorization-failed'),
+    'Request could not be completed. Sheet appearance and read access are not verified.',
+  ],
+  [
+    new Error('Private diagnostic detail must not be displayed'),
+    'Request could not be completed. Sheet appearance and read access are not verified.',
+  ],
+])(
+  'manual diagnostic outcome %s remains access-only and allows another explicit tap',
+  async (error, message) => {
+    if (error) {
+      jest
+        .mocked(NativeMedicationHealth.requestMedicationAccess)
+        .mockRejectedValueOnce(error);
+    }
+    await press(diagnosticAction);
+    expect(
+      NativeMedicationHealth.requestMedicationAccess,
+    ).toHaveBeenCalledTimes(1);
+    expect(diagnosticButton().props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+    expect(
+      screen.root.findByProps({ accessibilityRole: 'alert' }).props.children,
+    ).toBe(message);
+    expectNoDiagnosticDataOperations();
+    await press(diagnosticAction);
+    expect(
+      NativeMedicationHealth.requestMedicationAccess,
+    ).toHaveBeenCalledTimes(2);
+    expectNoDiagnosticDataOperations();
+  },
+);
+
+test('manual diagnostic blocks same-tick and pending duplicate taps', async () => {
+  let finish!: () => void;
+  jest
+    .mocked(NativeMedicationHealth.requestMedicationAccess)
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        }),
+    );
+  const request = diagnosticButton().props.onPress;
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = request();
+    await request();
+  });
+  expect(diagnosticButton().props.disabled).toBe(true);
+  expect(diagnosticButton().props.accessibilityState).toEqual({
+    disabled: true,
+    busy: true,
+  });
+  await act(async () => diagnosticButton().props.onPress());
+  expect(NativeMedicationHealth.requestMedicationAccess).toHaveBeenCalledTimes(
+    1,
+  );
+  expectNoDiagnosticDataOperations();
+  await act(async () => {
+    finish();
+    await pending;
+  });
+  expect(diagnosticButton().props.disabled).toBe(false);
+  expectNoDiagnosticDataOperations();
+});
+
+test('leaving Today during a request handles late failure without automatic retry or a stale tap', async () => {
+  let reject!: (error: Error) => void;
+  jest
+    .mocked(NativeMedicationHealth.requestMedicationAccess)
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((_, fail) => {
+          reject = fail;
+        }),
+    );
+  const request = diagnosticButton().props.onPress;
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = request();
+  });
+  await press('Library tab');
+  absent(diagnosticAction);
+  await act(async () => {
+    reject(new MedicationHealthError('authorization-failed'));
+    await pending;
+    await request();
+  });
+  await press('Today tab');
+  expect(diagnosticButton().props.disabled).toBe(false);
+  expect(
+    screen.root.findAllByProps({ accessibilityRole: 'alert' }),
+  ).toHaveLength(0);
+  expect(NativeMedicationHealth.requestMedicationAccess).toHaveBeenCalledTimes(
+    1,
+  );
+  expectNoDiagnosticDataOperations();
+});

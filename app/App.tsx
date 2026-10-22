@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomNavigation, {
   type AppTab,
 } from './src/components/BottomNavigation';
+import DebugHealthAuthorizationControl from './src/components/DebugHealthAuthorizationControl';
 import LibraryScreen from './src/screens/LibraryScreen';
 import MedicationScreen from './src/screens/MedicationScreen';
 import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
@@ -57,6 +58,9 @@ function App() {
     <SafeAreaProvider>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
       {renderScreen()}
+      {__DEV__ && activeScreen === 'main' && activeTab === 'Today' && (
+        <DebugHealthAuthorizationControl />
+      )}
       {activeScreen === 'main' && (
         <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} />
       )}
