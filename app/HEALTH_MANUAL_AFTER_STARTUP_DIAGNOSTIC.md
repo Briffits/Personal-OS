@@ -1,9 +1,32 @@
 # Manual Health authorisation after interactive startup
 
+## Reported result at 24c746b and next comparison
+
+The user confirmed the correct diagnostic control and Metro serving the isolated
+checkout. Under normal Run, Library → Today was interactive before one tap.
+No Apple medication sheet appeared. Reported UI: “Request Completed. Sheet
+appearance and read access not verified.” Navigation remained usable afterward.
+**Presentation FAIL** after interactive startup; read access and cancellation
+of a visible sheet remain unverified. Early hosted-test startup overlap is not
+necessary to reproduce this outcome. No root cause is established.
+
+Later Medication entry paused Xcode at
+`com.facebook.react.runtime.JavaScript: breakpoint 1.1 (1)`. Source location is
+unconfirmed. Record a separate unresolved debugger pause; **do not classify an
+app hang**. That later entry is outside this procedure's storage-free navigation.
+
+The [standalone native S/M comparison](../diagnostics/HealthAuthorizationComparison/README.md)
+is now implemented on a separate diagnostic branch, with one independent app
+identity and no Health queries or storage operations. Native compilation/device
+execution are pending. PersonalOS runtime/project/signing files are unchanged.
+The procedure below is retained as the record of the manual control already run.
+
+## Original control and procedure
+
 Branch: `diag/health-authorization-manual-after-startup`.
 Base: `59f9748a3110ec94c39938b738faf99f25ef0242`.
-This is a diagnostic control, not a presentation fix. Native build and physical-
-iPhone presentation acceptance for this control remain pending.
+This is a diagnostic control, not a presentation fix. Its reported device
+outcome is recorded above; visible-presentation acceptance remains unmet.
 
 ## Question and fixed implementation
 

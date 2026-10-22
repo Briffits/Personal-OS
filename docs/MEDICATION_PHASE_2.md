@@ -2,7 +2,22 @@
 
 Phase 2 adds read-only Health medication access and inventory linking commands. No visible Health-linking UI, MedicationScreen integration, observers, background delivery, anchors, Health writes, external processing or new dependencies were added. Phase 3 is not started.
 
-**Latest reported device result, `4ab5b66`: readiness-adjusted original smoke
+**Latest reported device result, `24c746b`: normal Run after interactive startup
+still shows no Apple medication sheet.** Correct diagnostic control and isolated
+Metro were confirmed; Library → Today navigation preceded one tap. The completion
+notice appeared and navigation remained usable. A later Medication-entry Xcode
+breakpoint pause has an unconfirmed source and is not classified as an app hang.
+See [the result record](../app/HEALTH_MANUAL_AFTER_STARTUP_DIAGNOSTIC.md).
+
+The authorization-only [standalone native comparison](../diagnostics/HealthAuthorizationComparison/README.md)
+now implements persistent-root S and retained-modal M in one independent app
+identity. It defaults to inert, has no Health queries/storage/third-party
+dependencies and leaves PersonalOS's runtime/project/signing untouched. Its
+separate permission state limits comparisons back to PersonalOS. **Native
+compilation, signing and device execution remain pending.** Use only its Mac
+procedure for this experiment; broader Health integration tests remain separate.
+
+**Historical reported device result, `4ab5b66`: readiness-adjusted original smoke
 callback/cleanup PASS in 0.565 seconds; visibility UNVERIFIED; presentation
 acceptance UNMET.** A brief unidentified screen appeared, too briefly to identify;
 Apple's medication-selection sheet was NOT confirmed. The trace was
