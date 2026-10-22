@@ -19,7 +19,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
 
-    delegate.dependencyProvider = RCTAppDependencyProvider()
+    delegate.dependencyProvider = PersonalOSDependencyProvider()
 
     reactNativeDelegate = delegate
     reactNativeFactory = factory
@@ -43,6 +43,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     configuration.delegateClass = SceneDelegate.self
 
     return configuration
+  }
+}
+
+final class PersonalOSDependencyProvider: RCTAppDependencyProvider {
+  override func unstableModulesRequiringMainQueueSetup() -> [String] {
+    // RN 0.87.1 lists a sample whose implementation pod this app does not use.
+    // Keep the generated provider's other capabilities and initialization order.
+    personalOSModulesRequiringMainQueueSetup(super.unstableModulesRequiringMainQueueSetup())
   }
 }
 

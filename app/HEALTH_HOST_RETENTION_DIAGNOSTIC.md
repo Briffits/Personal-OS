@@ -1,5 +1,14 @@
 # Controlled authorization host-retention comparison
 
+**Paused for startup validation.** The supplied Arm A run overlapped a native
+`SampleTurboModule` error overlay and React Native startup; its automated pass
+is not a clean comparison baseline. The focused app-owned provider correction
+is described in [startup validation](REACT_NATIVE_STARTUP_VALIDATION.md).
+Native build/device validation of that correction remains pending. First confirm
+normal Run reaches **Today** without the overlay, then repeat clean startup.
+Only after that gate may the comparison below resume, starting with a fresh A
+baseline. Preserve the installation, signing, permissions and storage safeguards.
+
 Branch: `diag/health-authorization-host-retention`, based on
 `4ab5b667678b24b7dcf5cddc4dc92c8b971a350b`. This is a diagnostic experiment,
 not a production presentation fix. It has not yet been built or run on iPhone.
