@@ -1,8 +1,19 @@
 # Shell navigation: manual VoiceOver walkthrough
 
-Use the isolated iPhone SE simulator at 375 × 667 points. Repeat at default and
-largest Accessibility text size in light and dark appearance. Do not replace the
-installed v2 app on the physical iPhone for this check.
+## Manual checks — unverified
+
+iOS Simulator cannot verify actual VoiceOver speech, rotor navigation or focus
+behaviour. Accessibility Inspector (including macOS speech) and automated audits
+are not substitutes for observing iOS VoiceOver on a physical device. See
+[Apple's accessibility testing guidance](https://developer.apple.com/documentation/accessibility/performing-accessibility-testing-for-your-app).
+
+All checks below remain explicitly **unverified**. No manual VoiceOver observations
+have been confirmed. Perform them only on a separately authorised physical-device
+test installation that does not replace or share retained data with the installed
+v2 app. Such an installation has not been validated by the simulator results.
+Repeat at default and largest Accessibility text size in light and dark appearance;
+record the actual device and screen dimensions. The 375 × 667-point simulator
+matrix below remains layout and automated-audit evidence only.
 
 1. **Reading order and headings:** On Today, Ask, Capture and Settings, swipe
    through the elements. Confirm each heading is spoken completely, followed by
@@ -33,8 +44,8 @@ automation. Jest checks cover the token boundary, unchanged heading names,
 uncapped text, vertical-only scrolling and absence of native operations during
 shell navigation. These do **not** establish spoken VoiceOver
 order, rotor behavior, announcements, destination focus or return focus. The
-walkthrough above remains **awaiting manual observation** until a person performs
-it; no VoiceOver acceptance is claimed by automated test results.
+walkthrough above remains **unverified, awaiting physical-device observation**
+until a person performs it; no VoiceOver acceptance is claimed by automated test results.
 
 ## Automated Mac recheck — 23 October 2026
 
@@ -57,14 +68,14 @@ The current correction replaces the earlier horizontal-scroll experiment.
 
 Settings is the longest heading. Both appearances produced these measurements:
 
-| Text size | Font scale | Token | Width (pt) | Height (pt) |
-| --- | --- | --- | --- | --- |
-| Default / Large | 1.000 | screenTitle | 118 | 36 |
-| Standard XXL | 1.235 | screenTitle | 144.5 | 44.5 |
-| Standard XXXL | 1.353 | screenTitle | 158 | 49 |
-| Accessibility Medium | 1.786 | cardTitle | 115.5 | 39.5 |
-| Accessibility Large | 2.143 | cardTitle | 137.5 | 47.5 |
-| Accessibility XXXL / maximum | 3.571 | cardTitle | 226 | 79 |
+| Text size                    | Font scale | Token       | Width (pt) | Height (pt) |
+| ---------------------------- | ---------- | ----------- | ---------- | ----------- |
+| Default / Large              | 1.000      | screenTitle | 118        | 36          |
+| Standard XXL                 | 1.235      | screenTitle | 144.5      | 44.5        |
+| Standard XXXL                | 1.353      | screenTitle | 158        | 49          |
+| Accessibility Medium         | 1.786      | cardTitle   | 115.5      | 39.5        |
+| Accessibility Large          | 2.143      | cardTitle   | 137.5      | 47.5        |
+| Accessibility XXXL / maximum | 3.571      | cardTitle   | 226        | 79          |
 
 The available width is approximately 333 points. Capture measures 218.5 points
 at maximum size. The size step at the category boundary is the explicit switch
