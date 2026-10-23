@@ -39,16 +39,19 @@ without adding new dividers to existing layouts.
 `AppCard` defaults to `standard`. Pass `variant="attention"` only when existing UI
 semantics call for it:
 
-- Today NOW/TODAY priorities (also currently rendered by Ask and Capture).
+- Today NOW/TODAY priorities.
 - Prescription load errors, pending cleanup and missing legacy details.
 - Medication legacy details-needed state.
 - Prescription records whose existing expiry calculation returns expired or
   expiring-soon. This uses expiry state explicitly, not the presence of any badge.
 
-Library entries, ordinary medication/prescription records and editor cards remain
-standard. Stock values do not introduce a new attention classification. Badges,
+Ask, Capture and Settings navigation placeholders, Library entries, ordinary
+medication/prescription records and editor cards use the standard variant.
+Stock values do not introduce a new attention classification. Badges,
 labels, checkmarks and accessibility states/actions remain independently meaningful.
-No domain rules or navigation behaviour change.
+Card styling does not change domain rules. The shell placeholders and Settings
+return path are described in [MVP navigation](MVP_SPEC.md#mvp-core-navigation);
+they do not implement the underlying features.
 
 ## Geometry and accessibility
 
