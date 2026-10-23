@@ -86,19 +86,28 @@ installation awaits a clean square source asset in a separate icon-only step.
 
 ## Shell headings at accessibility text sizes
 
-Ask, Capture and Settings retain the unchanged `screenTitle` token and uncapped
-text scaling. Their heading rows use the text's natural width. When a single
-scaled word exceeds the available viewport, the row scrolls horizontally instead
-of breaking the word, reducing the font or adding an ellipsis. A caption using
-existing tokens explains the sideways gesture only when measured content
-actually overflows. Each destination starts its heading at the leading edge.
-The rest of the screen continues to scroll vertically. The accessibility tree
-retains the complete heading text with its header role.
+Ask, Capture and Settings keep their visible names and `header` accessibility
+role. They use the existing `screenTitle` token (30/36, weight 700) at standard
+text sizes and `cardTitle` (17/22, weight 600) at accessibility sizes. The boundary
+is `fontScale >= 1.786`, React Native 0.87.1's iOS mapping for Accessibility Medium;
+the last standard category, XXXL, maps to 1.353. Recheck this mapping when upgrading
+React Native. No shared token is changed.
 
-This is a layout tradeoff: at the largest text size a wide heading cannot be seen
-all at once on a small display. Its full content remains reachable by scrolling;
-no characters are discarded. Actual VoiceOver navigation and focus require manual
-observation in addition to the automated checks.
+This is an explicit change of typographic hierarchy at the category boundary,
+so the first accessibility heading is smaller than the last standard heading.
+Within each range it continues to grow with Dynamic Type. There is no
+shrink-to-fit, scaling cap, line limit, ellipsis or horizontal scrolling.
+
+The heading gets the available content width and can wrap naturally. On the
+375-point simulator the padded content area is 333 points wide. At Accessibility
+XXXL (scale 3.571), the complete Settings heading measures 226 points and Capture
+218.5 points, each on one 79-point-high line. Both fit without reducing margins,
+splitting a word or changing their labels. The old heading scroll view,
+measurement state and gesture hint have been removed.
+
+See [the VoiceOver walkthrough](SHELL_VOICEOVER_CHECK.md) for the validation matrix
+and remaining manual observations. Automated layout checks do not establish
+spoken reading order, rotor behavior or navigation focus.
 
 ### Separate existing issue: tab labels at largest text size
 

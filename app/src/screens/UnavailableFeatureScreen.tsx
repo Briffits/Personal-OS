@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
-  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -34,10 +32,11 @@ function UnavailableFeatureScreen({
   onBack,
 }: UnavailableFeatureScreenProps) {
   const theme = usePersonalOSTheme();
-  const { width } = useWindowDimensions();
-  const [headingWidth, setHeadingWidth] = useState(0);
-  const [headingViewportWidth, setHeadingViewportWidth] = useState(0);
-  const headingOverflows = headingWidth > headingViewportWidth + 1;
+  const { width, fontScale } = useWindowDimensions();
+  // RN 0.87.1's iOS scale for the first accessibility category. Use a smaller
+  // existing token for that range; native text scaling remains fully enabled.
+  const headingTypography =
+    fontScale >= 1.786 ? typography.cardTitle : typography.screenTitle;
 
   return (
     <SafeAreaView
@@ -64,42 +63,16 @@ function UnavailableFeatureScreen({
           </Pressable>
         )}
 
-        <View style={styles.title}>
-          {/* A scaled single word can exceed the viewport. Give it its natural
-              width and scroll the row instead of splitting or shrinking it. */}
-          <ScrollView
-            key={feature}
-            horizontal
-            bounces={false}
-            directionalLockEnabled
-            testID="shell-heading-scroll"
-            onLayout={event =>
-              setHeadingViewportWidth(event.nativeEvent.layout.width)
-            }
-            onContentSizeChange={contentWidth => setHeadingWidth(contentWidth)}
-          >
-            <Text
-              accessibilityRole="header"
-              style={[
-                typography.screenTitle,
-                { color: theme.colours.textPrimary },
-              ]}
-            >
-              {feature}
-            </Text>
-          </ScrollView>
-          {headingOverflows && (
-            <Text
-              style={[
-                typography.caption,
-                styles.headingHint,
-                { color: theme.colours.textSecondary },
-              ]}
-            >
-              Swipe sideways
-            </Text>
-          )}
-        </View>
+        <Text
+          accessibilityRole="header"
+          style={[
+            headingTypography,
+            styles.title,
+            { color: theme.colours.textPrimary },
+          ]}
+        >
+          {feature}
+        </Text>
 
         <AppCard>
           <Text
@@ -135,8 +108,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     marginBottom: spacing.lg,
   },
-  title: { marginBottom: spacing.xxl },
-  headingHint: { marginTop: spacing.sm },
+  title: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    marginBottom: spacing.xxl,
+  },
   cardTitle: { marginBottom: spacing.sm },
 });
 

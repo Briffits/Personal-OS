@@ -4,7 +4,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import App from '../App';
-import { layout } from '../src/design-system';
+import { layout, typography } from '../src/design-system';
 import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
 import {
@@ -176,7 +176,7 @@ test('shell navigation stays in memory and a fresh app starts on Today', async (
 });
 
 test('new shell controls retain minimum targets and uncapped text on a small screen', async () => {
-  jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({
+  jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
     width: 320,
     height: 568,
     scale: 2,
@@ -190,11 +190,7 @@ test('new shell controls retain minimum targets and uncapped text on a small scr
     expect(style.minWidth).toBeGreaterThanOrEqual(layout.minimumTouchTarget);
   }
   function expectScalableContent() {
-    expect(
-      screen.root
-        .findAllByType(ReactNative.ScrollView)
-        .filter(node => !node.props.horizontal),
-    ).toHaveLength(1);
+    expect(screen.root.findAllByType(ReactNative.ScrollView)).toHaveLength(1);
     for (const text of screen.root.findAllByType(ReactNative.Text)) {
       expect(text.props.allowFontScaling).not.toBe(false);
       expect(text.props.maxFontSizeMultiplier).toBeUndefined();
@@ -214,23 +210,50 @@ test('new shell controls retain minimum targets and uncapped text on a small scr
 });
 
 test.each(['Ask', 'Capture', 'Settings'])(
-  '%s exposes heading overflow without reducing or truncating its type',
+  '%s adapts its heading token without changing its label, scaling or scroll direction',
   async destination => {
-    await press(
-      destination === 'Settings' ? 'Open Settings' : destination + ' tab',
+    const dimensions = jest.spyOn(
+      require('react-native'),
+      'useWindowDimensions',
     );
-    const headingRow = screen.root.findByProps({
-      testID: 'shell-heading-scroll',
-    });
-    expect(headingRow.props.horizontal).toBe(true);
-    await act(async () => {
-      headingRow.props.onLayout({ nativeEvent: { layout: { width: 333 } } });
-      headingRow.props.onContentSizeChange(400, 128);
-    });
-    expect(JSON.stringify(screen.toJSON())).toContain('Swipe sideways');
-    expectHeading(destination);
-    await act(async () => headingRow.props.onContentSizeChange(120, 36));
-    expect(JSON.stringify(screen.toJSON())).not.toContain('Swipe sideways');
+    for (const [fontScale, expectedToken] of [
+      [1, typography.screenTitle],
+      [1.235, typography.screenTitle],
+      [1.353, typography.screenTitle],
+      [1.785, typography.screenTitle],
+      [1.786, typography.cardTitle],
+      [2.143, typography.cardTitle],
+      [2.643, typography.cardTitle],
+      [3.143, typography.cardTitle],
+      [3.571, typography.cardTitle],
+      [1, typography.screenTitle],
+    ] as const) {
+      dimensions.mockReturnValue({
+        width: 375,
+        height: 667,
+        scale: 2,
+        fontScale,
+      });
+      await press(
+        destination === 'Settings' ? 'Open Settings' : destination + ' tab',
+      );
+      expectHeading(destination);
+      const heading = screen.root
+        .findAllByType(ReactNative.Text)
+        .find(node => node.props.accessibilityRole === 'header')!;
+      expect(ReactNative.StyleSheet.flatten(heading.props.style)).toMatchObject(
+        expectedToken,
+      );
+      expect(heading.props.allowFontScaling).not.toBe(false);
+      expect(heading.props.maxFontSizeMultiplier).toBeUndefined();
+      expect(heading.props.adjustsFontSizeToFit).not.toBe(true);
+      expect(heading.props.numberOfLines).toBeUndefined();
+      const scrollViews = screen.root.findAllByType(ReactNative.ScrollView);
+      expect(scrollViews).toHaveLength(1);
+      expect(scrollViews[0].props.horizontal).not.toBe(true);
+      expect(JSON.stringify(screen.toJSON())).not.toContain('Swipe sideways');
+      await press(destination === 'Settings' ? 'Back to Today' : 'Today tab');
+    }
     expectNoNativeOperations();
   },
 );
