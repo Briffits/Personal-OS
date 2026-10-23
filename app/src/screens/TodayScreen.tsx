@@ -1,19 +1,26 @@
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppCard from '../design-system/components/AppCard';
 import {
   goldenScreenPadding,
+  layout,
   spacing,
   typography,
   usePersonalOSTheme,
 } from '../design-system';
 
-function TodayScreen() {
+type TodayScreenProps = {
+  onOpenSettings: () => void;
+};
+
+function TodayScreen({ onOpenSettings }: TodayScreenProps) {
   const theme = usePersonalOSTheme();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -37,18 +44,31 @@ function TodayScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text
-          accessibilityRole="header"
-          style={[
-            typography.screenTitle,
-            styles.appTitle,
-            {
-              color: theme.colours.textPrimary,
-            },
-          ]}
-        >
-          Personal OS
-        </Text>
+        <View style={styles.header}>
+          <Text
+            accessibilityRole="header"
+            style={[
+              typography.screenTitle,
+              styles.appTitle,
+              { color: theme.colours.textPrimary },
+            ]}
+          >
+            Personal OS
+          </Text>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Settings"
+            onPress={onOpenSettings}
+            style={styles.settingsButton}
+          >
+            <Text
+              style={[typography.bodyStrong, { color: theme.colours.action }]}
+            >
+              Settings
+            </Text>
+          </Pressable>
+        </View>
 
         <Text
           style={[
@@ -161,8 +181,24 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: spacing.xxl,
   },
-  appTitle: {
+  header: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
     marginBottom: spacing.xxl,
+  },
+  settingsButton: {
+    maxWidth: '100%',
+    minHeight: layout.minimumTouchTarget,
+    minWidth: layout.minimumTouchTarget,
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  appTitle: {
+    maxWidth: '100%',
   },
   sectionLabel: {
     marginBottom: spacing.md,

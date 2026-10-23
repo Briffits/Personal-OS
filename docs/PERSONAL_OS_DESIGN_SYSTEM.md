@@ -39,16 +39,19 @@ without adding new dividers to existing layouts.
 `AppCard` defaults to `standard`. Pass `variant="attention"` only when existing UI
 semantics call for it:
 
-- Today NOW/TODAY priorities (also currently rendered by Ask and Capture).
+- Today NOW/TODAY priorities.
 - Prescription load errors, pending cleanup and missing legacy details.
 - Medication legacy details-needed state.
 - Prescription records whose existing expiry calculation returns expired or
   expiring-soon. This uses expiry state explicitly, not the presence of any badge.
 
-Library entries, ordinary medication/prescription records and editor cards remain
-standard. Stock values do not introduce a new attention classification. Badges,
+Ask, Capture and Settings navigation placeholders, Library entries, ordinary
+medication/prescription records and editor cards use the standard variant.
+Stock values do not introduce a new attention classification. Badges,
 labels, checkmarks and accessibility states/actions remain independently meaningful.
-No domain rules or navigation behaviour change.
+Card styling does not change domain rules. The shell placeholders and Settings
+return path are described in [MVP navigation](MVP_SPEC.md#mvp-core-navigation);
+they do not implement the underlying features.
 
 ## Geometry and accessibility
 
@@ -80,3 +83,26 @@ custom actions, small-screen wrapping, input boundaries, light/dark transitions,
 and native dialogs/protected viewing. Native launch-screen appearance is unchanged.
 The AppIcon catalogue and native files remain untouched. Normal/dark/tinted icon
 installation awaits a clean square source asset in a separate icon-only step.
+
+## Shell headings at accessibility text sizes
+
+Ask, Capture and Settings retain the unchanged `screenTitle` token and uncapped
+text scaling. Their heading rows use the text's natural width. When a single
+scaled word exceeds the available viewport, the row scrolls horizontally instead
+of breaking the word, reducing the font or adding an ellipsis. A caption using
+existing tokens explains the sideways gesture only when measured content
+actually overflows. Each destination starts its heading at the leading edge.
+The rest of the screen continues to scroll vertically. The accessibility tree
+retains the complete heading text with its header role.
+
+This is a layout tradeoff: at the largest text size a wide heading cannot be seen
+all at once on a small display. Its full content remains reachable by scrolling;
+no characters are discarded. Actual VoiceOver navigation and focus require manual
+observation in addition to the automated checks.
+
+### Separate existing issue: tab labels at largest text size
+
+The existing four equal-width bottom tabs split labels such as Today, Capture and
+Library within words at 375-point width and Accessibility XXXL. They remain
+operable, but readability needs a separately scoped adaptive-navigation review.
+PR #3 does not change the tab bar, its typography or its scaling behavior.

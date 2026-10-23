@@ -39,25 +39,49 @@ Today must always remain available.
 
 ### Ask
 
-Placeholder only in the first build.
-
-No AI functionality is required initially.
+Implemented as a distinct navigation placeholder labelled Ask, with a visible
+"Not available yet" message. The main tabs remain available for returning to
+Today or Library. No question entry, AI processing or connected-source access is
+implemented.
 
 ### Capture
 
-Placeholder only in the first build.
-
-No voice, camera or file processing is required initially.
+Implemented as a distinct navigation placeholder labelled Capture, with a visible
+"Not available yet" message. The main tabs remain available. No capture controls,
+voice, camera, photo or file processing is implemented.
 
 ### Library
 
-Provides access to the Prescription Wallet.
+Provides independent access to Medication and Prescriptions, each with a return
+to Library.
 
 Other library features may remain placeholders.
 
 ### Settings
 
-Accessible from the main interface.
+The Settings button on Today opens a labelled navigation placeholder with a
+"Not available yet" message and a Back to Today button. The tab bar is hidden
+while Settings is open, matching the existing secondary-screen pattern. There
+are no settings controls or saved preferences.
+
+### Shell navigation boundary and validation
+
+Today remains the default on launch. Ask, Capture and Settings are navigation
+placeholders, not completed features. Navigation state is held only in React
+state. Opening these screens performs no storage, document-picker, biometric or
+permission operations. Existing Medication and Prescriptions operations remain
+behind their Library destinations.
+
+The shell reuses semantic colours, spacing, typography, geometry and AppCard.
+Placeholder cards use the standard variant. New buttons have minimum 44-point
+touch targets and accessible labels; content scrolls and text scaling is uncapped.
+
+App navigation tests cover distinct destinations, selected tabs, Settings return
+and repeated visits, fresh-launch Today, existing Library return paths, and zero
+native data/document operations during shell navigation. Run TypeScript, ESLint
+and Jest from `app`. React renderer checks do not establish actual iOS layout or
+focus behaviour: small-screen wrapping, largest Dynamic Type, light/dark appearance,
+VoiceOver reading order and focus after navigation still require device checks.
 
 ---
 
