@@ -83,3 +83,26 @@ custom actions, small-screen wrapping, input boundaries, light/dark transitions,
 and native dialogs/protected viewing. Native launch-screen appearance is unchanged.
 The AppIcon catalogue and native files remain untouched. Normal/dark/tinted icon
 installation awaits a clean square source asset in a separate icon-only step.
+
+## Shell headings at accessibility text sizes
+
+Ask, Capture and Settings retain the unchanged `screenTitle` token and uncapped
+text scaling. Their heading rows use the text's natural width. When a single
+scaled word exceeds the available viewport, the row scrolls horizontally instead
+of breaking the word, reducing the font or adding an ellipsis. A caption using
+existing tokens explains the sideways gesture only when measured content
+actually overflows. Each destination starts its heading at the leading edge.
+The rest of the screen continues to scroll vertically. The accessibility tree
+retains the complete heading text with its header role.
+
+This is a layout tradeoff: at the largest text size a wide heading cannot be seen
+all at once on a small display. Its full content remains reachable by scrolling;
+no characters are discarded. Actual VoiceOver navigation and focus require manual
+observation in addition to the automated checks.
+
+### Separate existing issue: tab labels at largest text size
+
+The existing four equal-width bottom tabs split labels such as Today, Capture and
+Library within words at 375-point width and Accessibility XXXL. They remain
+operable, but readability needs a separately scoped adaptive-navigation review.
+PR #3 does not change the tab bar, its typography or its scaling behavior.

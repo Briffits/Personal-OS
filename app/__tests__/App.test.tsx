@@ -190,7 +190,11 @@ test('new shell controls retain minimum targets and uncapped text on a small scr
     expect(style.minWidth).toBeGreaterThanOrEqual(layout.minimumTouchTarget);
   }
   function expectScalableContent() {
-    expect(screen.root.findAllByType(ReactNative.ScrollView)).toHaveLength(1);
+    expect(
+      screen.root
+        .findAllByType(ReactNative.ScrollView)
+        .filter(node => !node.props.horizontal),
+    ).toHaveLength(1);
     for (const text of screen.root.findAllByType(ReactNative.Text)) {
       expect(text.props.allowFontScaling).not.toBe(false);
       expect(text.props.maxFontSizeMultiplier).toBeUndefined();
@@ -208,6 +212,28 @@ test('new shell controls retain minimum targets and uncapped text on a small scr
     expectScalableContent();
   }
 });
+
+test.each(['Ask', 'Capture', 'Settings'])(
+  '%s exposes heading overflow without reducing or truncating its type',
+  async destination => {
+    await press(
+      destination === 'Settings' ? 'Open Settings' : destination + ' tab',
+    );
+    const headingRow = screen.root.findByProps({
+      testID: 'shell-heading-scroll',
+    });
+    expect(headingRow.props.horizontal).toBe(true);
+    await act(async () => {
+      headingRow.props.onLayout({ nativeEvent: { layout: { width: 333 } } });
+      headingRow.props.onContentSizeChange(400, 128);
+    });
+    expect(JSON.stringify(screen.toJSON())).toContain('Swipe sideways');
+    expectHeading(destination);
+    await act(async () => headingRow.props.onContentSizeChange(120, 36));
+    expect(JSON.stringify(screen.toJSON())).not.toContain('Swipe sideways');
+    expectNoNativeOperations();
+  },
+);
 
 test.each(['Medication', 'Prescriptions'])(
   '%s is independently reachable and returns to Library',

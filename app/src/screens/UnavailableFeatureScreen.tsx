@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -33,6 +35,9 @@ function UnavailableFeatureScreen({
 }: UnavailableFeatureScreenProps) {
   const theme = usePersonalOSTheme();
   const { width } = useWindowDimensions();
+  const [headingWidth, setHeadingWidth] = useState(0);
+  const [headingViewportWidth, setHeadingViewportWidth] = useState(0);
+  const headingOverflows = headingWidth > headingViewportWidth + 1;
 
   return (
     <SafeAreaView
@@ -59,16 +64,42 @@ function UnavailableFeatureScreen({
           </Pressable>
         )}
 
-        <Text
-          accessibilityRole="header"
-          style={[
-            typography.screenTitle,
-            styles.title,
-            { color: theme.colours.textPrimary },
-          ]}
-        >
-          {feature}
-        </Text>
+        <View style={styles.title}>
+          {/* A scaled single word can exceed the viewport. Give it its natural
+              width and scroll the row instead of splitting or shrinking it. */}
+          <ScrollView
+            key={feature}
+            horizontal
+            bounces={false}
+            directionalLockEnabled
+            testID="shell-heading-scroll"
+            onLayout={event =>
+              setHeadingViewportWidth(event.nativeEvent.layout.width)
+            }
+            onContentSizeChange={contentWidth => setHeadingWidth(contentWidth)}
+          >
+            <Text
+              accessibilityRole="header"
+              style={[
+                typography.screenTitle,
+                { color: theme.colours.textPrimary },
+              ]}
+            >
+              {feature}
+            </Text>
+          </ScrollView>
+          {headingOverflows && (
+            <Text
+              style={[
+                typography.caption,
+                styles.headingHint,
+                { color: theme.colours.textSecondary },
+              ]}
+            >
+              Swipe sideways
+            </Text>
+          )}
+        </View>
 
         <AppCard>
           <Text
@@ -105,6 +136,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: { marginBottom: spacing.xxl },
+  headingHint: { marginTop: spacing.sm },
   cardTitle: { marginBottom: spacing.sm },
 });
 
