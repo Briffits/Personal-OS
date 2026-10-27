@@ -109,9 +109,13 @@ See [the VoiceOver walkthrough](SHELL_VOICEOVER_CHECK.md) for the validation mat
 and remaining manual observations. Automated layout checks do not establish
 spoken reading order, rotor behavior or navigation focus.
 
-### Separate existing issue: tab labels at largest text size
+### Responsive tab layout at enlarged text sizes
 
-The existing four equal-width bottom tabs split labels such as Today, Capture and
-Library within words at 375-point width and Accessibility XXXL. They remain
-operable, but readability needs a separately scoped adaptive-navigation review.
-PR #3 does not change the tab bar, its typography or its scaling behavior.
+The bottom navigation uses four equal-width columns when the available width
+accommodates the scaled labels, and two rows of two tabs when enlarged text
+requires more room. The order remains Today, Ask, Capture, Library. PR #3 changes
+this layout while preserving typography, full labels, uncapped text scaling,
+accessible names and selected states. A gap separates the rows, controls retain
+minimum 44-point touch targets, and the navigation stays outside the screen's
+vertical scroll view. See [navigation validation](NAVIGATION_ACCESSIBILITY.md)
+for the implementation and confirmed results.
