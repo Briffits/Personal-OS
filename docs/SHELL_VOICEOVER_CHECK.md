@@ -12,12 +12,26 @@ not a confirmed app defect. No tones or focus loss were reported at the end of
 the latest VoiceOver pass.
 
 See [the current observation record, historical reconciliation and focused
-remaining checks](NAVIGATION_ACCESSIBILITY.md#user-confirmed-physical-retest--27-october-2026).
-PR #3 is ready for final review while remaining draft. Current-build VoiceOver
-Settings return focus and precise traversal/Ask-Capture focus through the changed
-two-row tabs still need a focused pass before complete navigation acceptance.
-The full physical matrix is not complete. “Personal OS, heading” does not prove
-a separate Today heading or a Headings rotor pass.
+follow-up](NAVIGATION_ACCESSIBILITY.md#user-confirmed-physical-retest--27-october-2026).
+The focused outstanding checks now **pass** at maximum accessibility text/light:
+
+- Short right flicks traversed Today → Ask → Capture → Library across both rows.
+- Ask/Capture activation announced selected, with focus remaining on each bottom
+  tab. Their headings and placeholder content were reachable; heading access was
+  by touch exploration, not the rotor.
+- Settings opened with focus on Back to Today. Activating it announced “selected
+  today tab” and returned focus to Today in bottom navigation.
+
+Capture content traversal reached Today; Ask content traversal reached selected
+Ask. One repeated “not available yet” response preceded reaching Ask's description;
+its cause is unknown. These details are retained without inventing an exact
+whole-screen order or a confirmed defect.
+
+The focused physical gaps are closed and PR #3 is ready for final review while
+remaining draft. **No full scrolling, rotor or wider-matrix pass is claimed.**
+No separate scrolling gesture was reported. “Personal OS, heading” does not prove
+a separate Today heading or a Headings rotor pass. Older rotor results remain
+qualified by their earlier build and unspecified settings.
 
 ## Earlier manual checklist — not an acceptance record
 

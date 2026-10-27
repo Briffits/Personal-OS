@@ -186,7 +186,7 @@ manual checks. Display Zoom and per-app text overrides were not captured.
 | Largest accessibility / XXXL | Dark           | Navigation and Settings → Today worked.                                                     |
 | Largest accessibility / XXXL | Light          | All four tabs readable and tappable; no Settings-return pass inferred for this combination. |
 
-### VoiceOver on — largest accessibility text, light appearance
+### Initial VoiceOver retest — largest accessibility text, light appearance
 
 - “Personal OS, heading” was announced. This is the Today screen heading, not
   evidence of a separate TODAY section heading or a rotor pass.
@@ -224,37 +224,69 @@ These are genuine historical passes, not unverified checks to erase or passes
 for the new build at maximum text. Between the two commits, application code
 changes are confined to BottomNavigation layout; heading and route logic are
 unchanged. Historical rotor/content evidence remains relevant, while native
-focus and traversal through the new two-row layout need their own observations.
+focus and traversal through the new two-row layout are established separately
+by the focused follow-up below.
 The new Settings heading announcement does not establish its precise initial
 focus location. No complete physical scrolling check is recorded in either
 session. Simulator scrolling/layout evidence cannot establish VoiceOver behavior.
 
-### Review readiness and focused remaining validation
+### Focused follow-up — passed at maximum accessibility text/light
 
-**Ready for final review, with limited physical accessibility validation still
-open; keep PR #3 draft.** The reported navigation-usability blocker is resolved
-for the user-confirmed settings above. No current app defect is demonstrated by
-the swipe-tone report: short flicks now work and no tones/focus loss were reported
-in the latest pass. The original phone configuration/cause is not reconstructed,
-and the full planned physical matrix is not complete.
+The user confirmed the rightmost Larger Text setting with Larger Accessibility
+Sizes enabled, Light appearance, Today in PersonalOS VO Test and VoiceOver on.
+The installed application code remains
+`f30454c770021a7c48f423e233af1376b8a08d86`; subsequent PR updates are documentation
+only. The retained local `outstanding-checks-observations.md` records each response.
 
-Before claiming complete current-build VoiceOver navigation acceptance, perform
-one focused pass at largest accessibility text in light appearance:
+- **Both-row forward traversal: passed.** Starting on Today (“selected today
+  tab”, outline around Today in bottom navigation), short right flicks reached
+  Ask, Capture and Library in that order, with each outline on its bottom tab.
+  The user corrected one gesture report to right, not left; no reverse-traversal
+  pass is inferred. Library announced “library tab button” and was not activated
+  again in this follow-up.
+- **Ask/Capture activation, selection and actual focus: passed.** Activating Ask
+  announced “Selected Ask tab”; activating Capture announced “Selected Capture
+  Tab”. In both cases focus remained on the selected bottom navigation tab.
+  It did not automatically move to the screen heading in these transitions.
+- **Capture placeholder reachability: passed.** Touching the top heading announced
+  “Capture heading” with its outline on the heading. Short right flicks reached
+  “not available yet”, the description “saving new items through capture is not
+  available yet”, then “today tab button”, with matching focus outlines.
+- **Ask placeholder reachability: passed.** Touching its heading announced “ask
+  heading” with the matching outline. Right-flick responses reached “not available
+  yet”, then repeated that same text once, then the Ask description (user's
+  transcription: “asking questions is personal os is not availble yet”), each
+  with focus around the reported text. The next response was “selected ask tab
+  button”, with the outline around Ask in navigation, not Today. The repeated
+  announcement's cause is unknown; reaching the description and navigation was
+  subsequently confirmed. No exact whole-screen ordering pass is inferred.
+- **Settings entry and Back to Today return: passed.** After returning to Today,
+  the user opened Settings and reported “open settings” followed by “back to
+  today button”, with focus around Back to Today. Activating it announced
+  “selected today tab” and placed the outline around Today in bottom navigation.
+  This closes the current-build return-focus gap after the tabs remount; no
+  return to Open Settings is claimed.
 
-1. From Settings, activate Back to Today with VoiceOver and record the spoken
-   result and actual focus target. Confirm navigation remains reachable after
-   the tabs remount. This closes the current-build return-focus evidence gap;
-   the earlier unspecified-configuration return already passed.
-2. Record traversal through both tab rows using short flicks, without skipped or
-   unreachable controls. Activate Ask and Capture and record destination focus
-   and selected announcements. Include reaching content after any required
-   vertical scroll. Exact Library focus can be recorded in this same pass if
-   needed; the latest session already confirmed its activation and selection.
+No separate scrolling gesture was reported. Heading access above was by touch
+exploration, not the rotor. These focused passes establish the requested routes,
+selected announcements, observed focus targets and placeholder reachability;
+**no full scrolling, rotor or wider-matrix pass is claimed**.
 
-These are targeted validation gaps, not confirmed defects or a request to rerun
-all tests. Remaining rotor checks (including Personal OS, never yet confirmed),
-full scrolling coverage, exact whole-screen traversal order and untested physical
-size/appearance combinations remain explicitly incomplete. Historical Ask,
-Capture and Settings rotor passes need not be repeated merely to resolve the
-reported blockers. No broad matrix rerun or code change is justified without a
-new failure. Medication/Prescriptions and permission requests remain excluded.
+### Review readiness and remaining limits
+
+The focused outstanding checks have passed. The reported navigation-usability
+blocker is resolved for the confirmed settings, and the prior swipe-tone report
+alone is not a confirmed app defect. No further physical blocker is established
+by these observations. The PR is ready for final review; retain draft status
+until separately authorised. Final code review is a separate assessment.
+
+The complete physical matrix remains incomplete: full scrolling behavior,
+whole-screen traversal order, current-build rotor behavior and remaining
+size/appearance combinations are not fully verified. The precise Library
+activation focus target, original phone configuration/cause, Display Zoom and
+per-app overrides were not captured. Historical Ask/Capture/Settings rotor
+passes remain historical; Personal OS rotor navigation is not confirmed.
+The repeated Ask announcement and description-to-Ask transition are retained
+as observations without inferring a defect or a universal traversal order.
+No broad rerun or speculative focus change is justified without new evidence.
+Medication/Prescriptions and permission requests remain excluded.
