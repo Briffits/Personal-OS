@@ -1,14 +1,23 @@
 # Shell navigation: manual VoiceOver walkthrough
 
-## Manual checks — unverified
+## Current blocker and retest
+
+The walkthrough is paused. Enlarged-text navigation failure and VoiceOver swipe
+tones were reported on the physical test app. The exact category and cause are
+unresolved. “Personal OS, heading” does not establish a separate Today heading or
+rotor pass. See [the navigation investigation and retest settings](NAVIGATION_ACCESSIBILITY.md).
+The responsive tab fix has Simulator evidence only; physical retesting remains
+pending. The older results below are historical and do not override that blocker.
+
+## Earlier manual checklist — not an acceptance record
 
 iOS Simulator cannot verify actual VoiceOver speech, rotor navigation or focus
 behaviour. Accessibility Inspector (including macOS speech) and automated audits
 are not substitutes for observing iOS VoiceOver on a physical device. See
 [Apple's accessibility testing guidance](https://developer.apple.com/documentation/accessibility/performing-accessibility-testing-for-your-app).
 
-All checks below remain explicitly **unverified**. No manual VoiceOver observations
-have been confirmed. Perform them only on a separately authorised physical-device
+The complete checklist below remains **unverified**. The limited confirmed
+observations are recorded in the current investigation above. Perform them only on a separately authorised physical-device
 test installation that does not replace or share retained data with the installed
 v2 app. Such an installation has not been validated by the simulator results.
 Repeat at default and largest Accessibility text size in light and dark appearance;
@@ -21,7 +30,7 @@ matrix below remains layout and automated-audit evidence only.
    Headings rotor to reach the screen heading.
 2. **Selected tabs:** Activate Ask, Capture, Library and Today. Confirm the active
    tab is announced as selected and each control has its full name even when its
-   visible label wraps. Tab-label layout is a separate known issue.
+   visible label wraps. Check the responsive two-row layout at enlarged sizes.
 3. **Destination focus:** Open Settings and switch between Ask and Capture.
    Confirm focus lands on meaningful content for the new destination and never
    remains on a removed control or silently skips the heading.

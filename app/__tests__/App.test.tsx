@@ -395,3 +395,39 @@ test.each(['light', 'dark'] as const)(
     ).toBe(true);
   },
 );
+
+test.each([
+  [375, 1, '25%'],
+  [375, 1.353, '25%'],
+  [375, 1.786, '50%'],
+  [375, 3.571, '50%'],
+  [390, 3.571, '50%'],
+] as const)(
+  'navigation reflows at width %s and scale %s',
+  async (width, fontScale, expectedWidth) => {
+    jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+      width,
+      height: 667,
+      scale: 2,
+      fontScale,
+    });
+    await act(async () => screen.update(<App />));
+    for (const tab of ['Today', 'Ask', 'Capture', 'Library']) {
+      const button = screen.root.findByProps({
+        accessibilityLabel: tab + ' tab',
+      });
+      const style = ReactNative.StyleSheet.flatten(button.props.style);
+      expect(style.width).toBe(expectedWidth);
+      expect(style.minHeight).toBeGreaterThanOrEqual(44);
+      expect(style.minWidth).toBeGreaterThanOrEqual(44);
+      const text = button.findByType(ReactNative.Text);
+      expect(text.props.allowFontScaling).not.toBe(false);
+      expect(text.props.maxFontSizeMultiplier).toBeUndefined();
+      expect(text.props.numberOfLines).toBeUndefined();
+      await press(tab + ' tab');
+      expect(button.props.accessibilityState).toEqual({ selected: true });
+    }
+    await press('Today tab');
+    expectNoNativeOperations();
+  },
+);
