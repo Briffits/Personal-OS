@@ -1,13 +1,23 @@
 # Shell navigation: manual VoiceOver walkthrough
 
-## Current blocker and retest
+## Current evidence and review status
 
-The walkthrough is paused. Enlarged-text navigation failure and VoiceOver swipe
-tones were reported on the physical test app. The exact category and cause are
-unresolved. “Personal OS, heading” does not establish a separate Today heading or
-rotor pass. See [the navigation investigation and retest settings](NAVIGATION_ACCESSIBILITY.md).
-The responsive tab fix has Simulator evidence only; physical retesting remains
-pending. The older results below are historical and do not override that blocker.
+The user-confirmed retest on iPhone 13 Pro / PersonalOS VO Test at
+`f30454c770021a7c48f423e233af1376b8a08d86` confirms enlarged-text tab usability
+at the recorded settings, including maximum accessibility text. Short one-finger
+VoiceOver flicks traversed content and reached tabs at maximum size in light
+appearance; Library/Today selection and Settings heading/content were reported.
+Earlier long swipes are the user's likely explanation for tones/no movement,
+not a confirmed app defect. No tones or focus loss were reported at the end of
+the latest VoiceOver pass.
+
+See [the current observation record, historical reconciliation and focused
+remaining checks](NAVIGATION_ACCESSIBILITY.md#user-confirmed-physical-retest--27-october-2026).
+PR #3 is ready for final review while remaining draft. Current-build VoiceOver
+Settings return focus and precise traversal/Ask-Capture focus through the changed
+two-row tabs still need a focused pass before complete navigation acceptance.
+The full physical matrix is not complete. “Personal OS, heading” does not prove
+a separate Today heading or a Headings rotor pass.
 
 ## Earlier manual checklist — not an acceptance record
 
@@ -16,13 +26,11 @@ behaviour. Accessibility Inspector (including macOS speech) and automated audits
 are not substitutes for observing iOS VoiceOver on a physical device. See
 [Apple's accessibility testing guidance](https://developer.apple.com/documentation/accessibility/performing-accessibility-testing-for-your-app).
 
-The complete checklist below remains **unverified**. The limited confirmed
-observations are recorded in the current investigation above. Perform them only on a separately authorised physical-device
-test installation that does not replace or share retained data with the installed
-v2 app. Such an installation has not been validated by the simulator results.
-Repeat at default and largest Accessibility text size in light and dark appearance;
-record the actual device and screen dimensions. The 375 × 667-point simulator
-matrix below remains layout and automated-audit evidence only.
+The checklist below is the original full plan, now **partially verified**. Use
+the linked reconciliation to distinguish current observations, older passes at
+unspecified settings and remaining gaps; do not repeat completed work solely to
+fill this checklist. Only use the authorised isolated test app. The 375 × 667-point
+simulator matrix below remains layout and automated-audit evidence only.
 
 1. **Reading order and headings:** On Today, Ask, Capture and Settings, swipe
    through the elements. Confirm each heading is spoken completely, followed by
@@ -53,8 +61,9 @@ automation. Jest checks cover the token boundary, unchanged heading names,
 uncapped text, vertical-only scrolling and absence of native operations during
 shell navigation. These do **not** establish spoken VoiceOver
 order, rotor behavior, announcements, destination focus or return focus. The
-walkthrough above remains **unverified, awaiting physical-device observation**
-until a person performs it; no VoiceOver acceptance is claimed by automated test results.
+walkthrough remains **partially verified by user observations**, with explicit
+gaps in the linked record; no VoiceOver acceptance is inferred from automated
+test results.
 
 ## Automated Mac recheck — 23 October 2026
 
@@ -89,4 +98,5 @@ Settings is the longest heading. Both appearances produced these measurements:
 The available width is approximately 333 points. Capture measures 218.5 points
 at maximum size. The size step at the category boundary is the explicit switch
 to the approved smaller existing token, not shrink-to-fit or a Dynamic Type cap.
-Manual VoiceOver observation remains outstanding as described above.
+These are historical automated results. Current and earlier manual VoiceOver
+observations, and their remaining limits, are reconciled in the linked record.
