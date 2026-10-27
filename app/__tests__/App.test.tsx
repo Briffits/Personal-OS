@@ -7,6 +7,7 @@ import App from '../App';
 import { layout, typography } from '../src/design-system';
 import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
+import { NativeReminders } from '../src/native/NativeReminders';
 import {
   firstId,
   prescriptionId,
@@ -19,6 +20,13 @@ jest.mock(
 );
 jest.mock('../src/native/NativeMedicationStorage', () => ({
   NativeMedicationStorage: { read: jest.fn(), mutate: jest.fn() },
+}));
+jest.mock('../src/native/NativeReminders', () => ({
+  NativeReminders: {
+    getAuthorizationStatus: jest.fn(),
+    requestAccess: jest.fn(),
+    fetchDueToday: jest.fn(),
+  },
 }));
 jest.mock('../src/native/NativePrescriptionDocuments', () => ({
   NativePrescriptionDocuments: {
@@ -38,6 +46,10 @@ let screen: ReactTestRenderer.ReactTestRenderer;
 let fixture: ReturnType<typeof medicationFixture>;
 beforeEach(async () => {
   jest.clearAllMocks();
+  ReactNative.AppState.currentState = 'active';
+  jest
+    .mocked(NativeReminders.getAuthorizationStatus)
+    .mockResolvedValue('notDetermined');
   fixture = medicationFixture();
   jest.mocked(NativeMedicationStorage.read).mockImplementation(fixture.read);
   jest
@@ -83,6 +95,7 @@ function expectNoNativeOperations() {
   for (const boundary of [
     NativeMedicationStorage,
     NativePrescriptionDocuments,
+    NativeReminders,
   ]) {
     for (const operation of Object.values(boundary)) {
       expect(operation).not.toHaveBeenCalled();
@@ -99,6 +112,33 @@ test('renders the four main destinations with Today selected', () => {
     ).toEqual({ selected: tab === 'Today' });
   }
   expectNoNativeOperations();
+});
+
+test('Reminders is reachable from Today and returns without prompting or touching other domains', async () => {
+  for (let visit = 0; visit < 2; visit += 1) {
+    await press('Open reminders due today');
+    expectHeading('Reminders due today');
+    absent('Today tab');
+    expect(NativeReminders.getAuthorizationStatus).toHaveBeenCalledTimes(
+      visit + 1,
+    );
+    expect(NativeReminders.requestAccess).not.toHaveBeenCalled();
+    expect(NativeReminders.fetchDueToday).not.toHaveBeenCalled();
+    await press('Back to Today');
+    expectHeading('Personal OS');
+    expect(
+      screen.root.findByProps({ accessibilityLabel: 'Today tab' }).props
+        .accessibilityState,
+    ).toEqual({ selected: true });
+  }
+  for (const boundary of [
+    NativeMedicationStorage,
+    NativePrescriptionDocuments,
+  ]) {
+    for (const operation of Object.values(boundary)) {
+      expect(operation).not.toHaveBeenCalled();
+    }
+  }
 });
 
 test.each(['Ask', 'Capture'])(
