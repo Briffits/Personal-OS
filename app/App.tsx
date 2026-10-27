@@ -9,10 +9,11 @@ import LibraryScreen from './src/screens/LibraryScreen';
 import MedicationScreen from './src/screens/MedicationScreen';
 import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
 import TodayScreen from './src/screens/TodayScreen';
+import UnavailableFeatureScreen from './src/screens/UnavailableFeatureScreen';
 
 import { usePersonalOSTheme } from './src/design-system';
 
-type AppScreen = 'main' | 'medication' | 'prescriptionWallet';
+type AppScreen = 'main' | 'medication' | 'prescriptionWallet' | 'settings';
 
 function App() {
   const theme = usePersonalOSTheme();
@@ -25,6 +26,15 @@ function App() {
   };
 
   const renderScreen = () => {
+    if (activeScreen === 'settings') {
+      return (
+        <UnavailableFeatureScreen
+          feature="Settings"
+          onBack={() => setActiveScreen('main')}
+        />
+      );
+    }
+
     if (activeScreen === 'medication') {
       return <MedicationScreen onBack={() => setActiveScreen('main')} />;
     }
@@ -47,9 +57,12 @@ function App() {
         );
       case 'Ask':
       case 'Capture':
+        return <UnavailableFeatureScreen feature={activeTab} />;
       case 'Today':
       default:
-        return <TodayScreen />;
+        return (
+          <TodayScreen onOpenSettings={() => setActiveScreen('settings')} />
+        );
     }
   };
 

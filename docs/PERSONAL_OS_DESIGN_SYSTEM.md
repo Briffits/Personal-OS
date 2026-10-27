@@ -39,16 +39,19 @@ without adding new dividers to existing layouts.
 `AppCard` defaults to `standard`. Pass `variant="attention"` only when existing UI
 semantics call for it:
 
-- Today NOW/TODAY priorities (also currently rendered by Ask and Capture).
+- Today NOW/TODAY priorities.
 - Prescription load errors, pending cleanup and missing legacy details.
 - Medication legacy details-needed state.
 - Prescription records whose existing expiry calculation returns expired or
   expiring-soon. This uses expiry state explicitly, not the presence of any badge.
 
-Library entries, ordinary medication/prescription records and editor cards remain
-standard. Stock values do not introduce a new attention classification. Badges,
+Ask, Capture and Settings navigation placeholders, Library entries, ordinary
+medication/prescription records and editor cards use the standard variant.
+Stock values do not introduce a new attention classification. Badges,
 labels, checkmarks and accessibility states/actions remain independently meaningful.
-No domain rules or navigation behaviour change.
+Card styling does not change domain rules. The shell placeholders and Settings
+return path are described in [MVP navigation](MVP_SPEC.md#mvp-core-navigation);
+they do not implement the underlying features.
 
 ## Geometry and accessibility
 
@@ -80,3 +83,39 @@ custom actions, small-screen wrapping, input boundaries, light/dark transitions,
 and native dialogs/protected viewing. Native launch-screen appearance is unchanged.
 The AppIcon catalogue and native files remain untouched. Normal/dark/tinted icon
 installation awaits a clean square source asset in a separate icon-only step.
+
+## Shell headings at accessibility text sizes
+
+Ask, Capture and Settings keep their visible names and `header` accessibility
+role. They use the existing `screenTitle` token (30/36, weight 700) at standard
+text sizes and `cardTitle` (17/22, weight 600) at accessibility sizes. The boundary
+is `fontScale >= 1.786`, React Native 0.87.1's iOS mapping for Accessibility Medium;
+the last standard category, XXXL, maps to 1.353. Recheck this mapping when upgrading
+React Native. No shared token is changed.
+
+This is an explicit change of typographic hierarchy at the category boundary,
+so the first accessibility heading is smaller than the last standard heading.
+Within each range it continues to grow with Dynamic Type. There is no
+shrink-to-fit, scaling cap, line limit, ellipsis or horizontal scrolling.
+
+The heading gets the available content width and can wrap naturally. On the
+375-point simulator the padded content area is 333 points wide. At Accessibility
+XXXL (scale 3.571), the complete Settings heading measures 226 points and Capture
+218.5 points, each on one 79-point-high line. Both fit without reducing margins,
+splitting a word or changing their labels. The old heading scroll view,
+measurement state and gesture hint have been removed.
+
+See [the VoiceOver walkthrough](SHELL_VOICEOVER_CHECK.md) for the validation matrix
+and remaining manual observations. Automated layout checks do not establish
+spoken reading order, rotor behavior or navigation focus.
+
+### Responsive tab layout at enlarged text sizes
+
+The bottom navigation uses four equal-width columns when the available width
+accommodates the scaled labels, and two rows of two tabs when enlarged text
+requires more room. The order remains Today, Ask, Capture, Library. PR #3 changes
+this layout while preserving typography, full labels, uncapped text scaling,
+accessible names and selected states. A gap separates the rows, controls retain
+minimum 44-point touch targets, and the navigation stays outside the screen's
+vertical scroll view. See [navigation validation](NAVIGATION_ACCESSIBILITY.md)
+for the implementation and confirmed results.
