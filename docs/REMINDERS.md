@@ -1,7 +1,7 @@
 # Reminders due today — VPS slice and Mac handover
 
-Status: TypeScript/UI implemented; EventKit bridge, permission configuration,
-native build and physical-iPhone validation are outstanding. Based on
+Status: TypeScript/UI and native EventKit bridge implemented; unsigned iOS build
+and synthetic native tests passed. Physical-iPhone validation is outstanding. Based on
 `826d5f4ec22183d7a8869e983fbc3e02b5c0c2f3` (merged shell navigation).
 
 ## Implemented boundary
@@ -132,7 +132,8 @@ usage description and availability-guarded access API for the existing OS range,
 without requesting Calendar or Contacts permission. Sources:
 [EventKit access](https://developer.apple.com/documentation/eventkit/accessing-the-event-store)
 and [due-date components](https://developer.apple.com/documentation/eventkit/ekreminder/duedatecomponents).
-No native code, permission keys or Xcode changes are included in this VPS slice.
+The original VPS slice included no native code, permission keys or Xcode changes.
+The Mac implementation below adds them without changing the TypeScript contract.
 
 ## Refresh and failure behavior
 
@@ -201,3 +202,117 @@ requires resolution or changes for this slice. No storage, HealthKit, dependency
 deployment, signing or deployment-target changes are included.
 
 Suggested commit: `Add read-only Reminders UI and native contract`
+
+
+## Mac implementation and validation — 2026-10-27
+
+Implemented in the isolated `feat/reminders-today-mac` worktree, starting at
+`5ae4ac8bf61be57c269771d1b91a41dc976df48e`.
+
+### Native files and responsibilities
+
+- `app/ios/RemindersModule.swift` and `RemindersBridge.m`: register
+  `NativeModules.Reminders` with exactly the three promise methods above. The
+  bridge runs on the main queue, so foreground inspection and permission request
+  initiation have no intervening asynchronous hop.
+- `app/ios/RemindersReader.swift`: pure date/filtering logic and an injected-store
+  coordinator for authorization, busy handling, and snapshot freshness.
+- `app/ios/EventKitRemindersStore.swift`: lazy EventKit store, OS-version-guarded
+  access requests, authorization normalization, and asynchronous read projection.
+- `app/ios/PersonalOS.xcodeproj/project.pbxproj`: adds the four source files only.
+- `app/ios/PersonalOS/Info.plist`: adds `NSRemindersFullAccessUsageDescription`
+  and the legacy `NSRemindersUsageDescription` for the existing OS range.
+- `app/ios/tests/RemindersTests.swift` and `run-reminders-checks.sh`: synthetic
+  native tests in a temporary, dependency-free Swift package. They never create
+  an EventKit store or request OS access.
+
+The adapter queries incomplete reminders across accessible lists with nil date
+bounds. This avoids depending on EventKit range conversion for floating and
+all-day values; the native filter owns exact membership. Only identifier, title,
+completion flag and due components are projected. This scans all incomplete
+reminders on each requested refresh, a deliberate correctness tradeoff; large
+real-world lists still need device performance validation.
+
+Date-only values retain their source calendar meaning and are converted to a
+Gregorian civil date in the local zone, without applying their explicit zone as
+an instant offset. Timed values use the due components' explicit zone or the
+current zone for floating time. Missing source calendars default to Gregorian,
+as required by EventKit. Invalid or incomplete date components, nonexistent DST
+wall times, and duplicate/blank included IDs fail the read rather than producing
+misleading data. Ambiguous repeated wall times use Foundation's deterministic
+calendar resolution; no recurrence expansion is performed.
+
+Only `requestAccess` can prompt, and only while active and idle. Existing access
+states return without prompting. iOS 17+ uses full Reminders access; earlier iOS
+uses the legacy Reminders-only request. Unknown/write-only authorization fails
+closed. Reads check access before querying and at completion, including after
+filtering. Day/time-zone changes reject `read-failed`. Nil queries fail; an
+actually successful authorized empty query returns an empty snapshot. Reads
+have a 30-second timeout that cancels the EventKit fetch and rejects through the
+same completion checks; late callbacks are ignored. Permission operations remain
+busy until the OS completes the user-driven permission decision.
+
+No reminders are written, saved, completed, deleted, logged or persisted. No
+Calendar/Contacts permission, backend, storage or HealthKit integration is added.
+
+### API verification
+
+Verified against the installed Xcode 27.1 / iPhoneOS 27.1 SDK headers
+(`EKEventStore.h`, `EKReminder.h`, `EKTypes.h`) and Apple's documentation:
+
+- [Due-date components](https://developer.apple.com/documentation/eventkit/ekreminder/duedatecomponents):
+  floating time, date-only semantics, Gregorian requirements and independent
+  due-component time zone.
+- [Full Reminders access](https://developer.apple.com/documentation/eventkit/ekeventstore/requestfullaccesstoreminders(completion:)):
+  iOS 17 availability, asynchronous permission response and avoiding reads before
+  access is granted.
+- [Full-access purpose string](https://developer.apple.com/documentation/bundleresources/information-property-list/nsremindersfullaccessusagedescription):
+  required purpose text.
+
+SDK headers additionally establish nil fetch results, the all-incomplete
+predicate with nil bounds/lists, cancellation behavior, and full-access status
+compatibility with the legacy authorized value.
+
+### Checks performed
+
+- `bash app/ios/tests/run-reminders-checks.sh`: **15 tests passed**. Covers
+  23/25-hour days, both midnight boundaries, earlier-today membership,
+  date-only/floating/explicit-zone values, non-Gregorian conversion, leap/invalid
+  dates, DST gaps/overlaps, ordering, IDs, authorization mapping, prompt gating,
+  busy handling, allow/deny/failure, revocation, nil/empty reads and day/zone changes.
+- From `app`, `./node_modules/.bin/tsc --noEmit`: passed.
+- `npm test -- --runInBand --watchman=false NativeReminders RemindersScreen App.test`:
+  **3 suites / 69 tests passed**. Unrelated JS suites were not rerun.
+- `npm run lint -- --max-warnings=0`: passed.
+- Plist/project syntax and `git diff --check`: passed.
+- Unsigned generic-iOS Debug build: **BUILD SUCCEEDED**. Existing React umbrella
+  header and script-phase warnings remain; no Reminders source warnings.
+
+The isolated worktree had no dependencies installed. Matching existing Mac
+`node_modules`, Pods and generated build inputs were copied locally after checking
+both lockfiles; no package/pod installation ran. Copied autolinking paths were
+retargeted only within the isolated ignored build inputs. Build outputs went to
+`/private/tmp/personalos-reminders-derived`, with log at
+`/private/tmp/personalos-reminders-build.log`:
+
+```sh
+RCT_NO_LAUNCH_PACKAGER=1 SKIP_BUNDLING=1 xcodebuild \
+  -workspace app/ios/PersonalOS.xcworkspace -scheme PersonalOS \
+  -configuration Debug -destination 'generic/platform=iOS' \
+  -derivedDataPath /private/tmp/personalos-reminders-derived \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+```
+
+This validates native compilation/linking, not JS bundling, runtime module
+availability, actual EventKit delivery, read-timeout cancellation on a device,
+or the permission dialog. Deployment targets, signing settings and dependency
+manifests/lockfiles are unchanged. No install, launch, device permission request,
+merge or deployment was performed; Metro and other worktrees were not changed.
+
+The physical-iPhone checklist above remains outstanding, including authorization
+and Settings transitions, real EventKit date semantics and time-zone/DST changes,
+iCloud/offline behavior, foreground refresh, failed/slow reads and large lists,
+VoiceOver, largest Dynamic Type, small-screen layout and light/dark appearance.
+Use only synthetic reminders for those checks.
+
+Suggested commit: `Add read-only native Reminders bridge and tests`

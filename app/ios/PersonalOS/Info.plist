@@ -33,6 +33,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Personal OS reads your reminders to show incomplete tasks due today. It does not change your reminders.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Personal OS reads your reminders to show incomplete tasks due today. It does not change your reminders.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID is used to unlock and view your stored prescription.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

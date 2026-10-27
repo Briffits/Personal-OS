@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AADE00000000000000000004 /* RemindersBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000014 /* RemindersBridge.m */; };
+		AADE00000000000000000003 /* RemindersModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000013 /* RemindersModule.swift */; };
+		AADE00000000000000000002 /* EventKitRemindersStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000012 /* EventKitRemindersStore.swift */; };
+		AADE00000000000000000001 /* RemindersReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000011 /* RemindersReader.swift */; };
 		AADA00000000000000000001 /* ReactNativeStartupModules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADA00000000000000000011 /* ReactNativeStartupModules.swift */; };
 		AACC00000000000000000001 /* MedicationCollectionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000011 /* MedicationCollectionStorage.swift */; };
 		AACC00000000000000000002 /* MedicationKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00000000000000000012 /* MedicationKeychain.swift */; };
@@ -24,6 +28,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AADE00000000000000000014 /* RemindersBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RemindersBridge.m; sourceTree = "<group>"; };
+		AADE00000000000000000013 /* RemindersModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersModule.swift; sourceTree = "<group>"; };
+		AADE00000000000000000012 /* EventKitRemindersStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitRemindersStore.swift; sourceTree = "<group>"; };
+		AADE00000000000000000011 /* RemindersReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersReader.swift; sourceTree = "<group>"; };
 		AADA00000000000000000011 /* ReactNativeStartupModules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactNativeStartupModules.swift; sourceTree = "<group>"; };
 		AACC00000000000000000011 /* MedicationCollectionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationCollectionStorage.swift; sourceTree = "<group>"; };
 		AACC00000000000000000012 /* MedicationKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationKeychain.swift; sourceTree = "<group>"; };
@@ -89,6 +97,10 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				AADE00000000000000000011 /* RemindersReader.swift */,
+				AADE00000000000000000012 /* EventKitRemindersStore.swift */,
+				AADE00000000000000000013 /* RemindersModule.swift */,
+				AADE00000000000000000014 /* RemindersBridge.m */,
 				AADA00000000000000000011 /* ReactNativeStartupModules.swift */,
 				9BBD398C306957440016AF90 /* PrescriptionDocumentStorage.swift */,
 				AACC00000000000000000011 /* MedicationCollectionStorage.swift */,
@@ -282,6 +294,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AADE00000000000000000001 /* RemindersReader.swift in Sources */,
+				AADE00000000000000000002 /* EventKitRemindersStore.swift in Sources */,
+				AADE00000000000000000003 /* RemindersModule.swift in Sources */,
+				AADE00000000000000000004 /* RemindersBridge.m in Sources */,
 				AADA00000000000000000001 /* ReactNativeStartupModules.swift in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				9B983C08306267AB00B0891C /* SceneDelegate.swift in Sources */,
