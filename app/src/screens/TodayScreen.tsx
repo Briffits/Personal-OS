@@ -18,9 +18,10 @@ import {
 
 type TodayScreenProps = {
   onOpenSettings: () => void;
+  onOpenReminders: () => void;
 };
 
-function TodayScreen({ onOpenSettings }: TodayScreenProps) {
+function TodayScreen({ onOpenSettings, onOpenReminders }: TodayScreenProps) {
   const theme = usePersonalOSTheme();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -169,6 +170,21 @@ function TodayScreen({ onOpenSettings }: TodayScreenProps) {
             A third important item will appear here.
           </Text>
         </AppCard>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open reminders due today"
+          onPress={onOpenReminders}
+          style={styles.settingsButton}
+        >
+          <Text
+            style={[
+              typography.bodyStrong,
+              { color: theme.colours.textPrimary },
+            ]}
+          >
+            Reminders due today
+          </Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

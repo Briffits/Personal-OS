@@ -8,12 +8,18 @@ import BottomNavigation, {
 import LibraryScreen from './src/screens/LibraryScreen';
 import MedicationScreen from './src/screens/MedicationScreen';
 import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
+import RemindersScreen from './src/screens/RemindersScreen';
 import TodayScreen from './src/screens/TodayScreen';
 import UnavailableFeatureScreen from './src/screens/UnavailableFeatureScreen';
 
 import { usePersonalOSTheme } from './src/design-system';
 
-type AppScreen = 'main' | 'medication' | 'prescriptionWallet' | 'settings';
+type AppScreen =
+  | 'main'
+  | 'medication'
+  | 'prescriptionWallet'
+  | 'settings'
+  | 'reminders';
 
 function App() {
   const theme = usePersonalOSTheme();
@@ -26,6 +32,9 @@ function App() {
   };
 
   const renderScreen = () => {
+    if (activeScreen === 'reminders') {
+      return <RemindersScreen onBack={() => setActiveScreen('main')} />;
+    }
     if (activeScreen === 'settings') {
       return (
         <UnavailableFeatureScreen
@@ -61,7 +70,10 @@ function App() {
       case 'Today':
       default:
         return (
-          <TodayScreen onOpenSettings={() => setActiveScreen('settings')} />
+          <TodayScreen
+            onOpenSettings={() => setActiveScreen('settings')}
+            onOpenReminders={() => setActiveScreen('reminders')}
+          />
         );
     }
   };
