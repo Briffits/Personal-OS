@@ -1,0 +1,10 @@
+[NativeHealthComparison] path=D uptime=283044.80776195833 main=true root.appear
+[NativeHealthComparison] path=D uptime=283045.0523887917 main=true scene.active
+[NativeHealthComparison] path=D uptime=283068.9622667084 main=true direct.button.tap
+[NativeHealthComparison] path=D uptime=283068.962706125 main=true context.ready
+[NativeHealthComparison] path=D uptime=283068.96273458336 main=true direct.presenter.explicit.retained
+[NativeHealthComparison] path=D uptime=283068.96276925004 main=true request.begin
+[NativeHealthComparison] path=D uptime=283087.710018375 main=true scene.inactive
+[NativeHealthComparison] path=D uptime=283088.9791521667 main=true scene.background
+[NativeHealthComparison] path=D uptime=283088.97923245834 main=true cleanup.rootRetained
+[NativeHealthComparison] path=D uptime=283088.9792431667 main=true run.ended

@@ -1,0 +1,36 @@
+{
+  "label": "explicit-presenter D after fresh installation — user-requested fresh run 2",
+  "human_confirmed": {
+    "before_request": "No request started; interaction counter increments",
+    "sheet_appeared": true,
+    "sheet_disappeared_afterward": true,
+    "counter_responsive_afterward": true,
+    "actual_sheet_action": "Don’t Allow",
+    "continuously_foregrounded_without_interruption": true
+  },
+  "human_not_yet_confirmed": [],
+  "trace_confirmed": {
+    "path": "D",
+    "explicit_presenter_event": true,
+    "manual_request_count": 1,
+    "callback_success": true,
+    "error_domain": "none",
+    "error_code": "none",
+    "request_to_raw_callback_seconds": 11.321550374967046,
+    "request_to_main_callback_seconds": 11.32556720834691,
+    "observation_seconds": 10.484839291661046,
+    "observation_completed": true,
+    "root_retained": true,
+    "post_observation_interaction": true,
+    "timeout_logged": false,
+    "background_logged_between_request_and_run_end": false
+  },
+  "limitations": [
+    "Read access untested; success is not consent",
+    "Fresh installation; prior permission-state continuity unknown",
+    "Earlier explicit-presenter run issued a request and was interrupted by backgrounding",
+    "Historical D2 had a pre-request background/foreground cycle; not a matched control",
+    "Single completed observation does not establish causation or reliable fix; FB25287175 unresolved"
+  ],
+  "further_attempt_performed": false
+}

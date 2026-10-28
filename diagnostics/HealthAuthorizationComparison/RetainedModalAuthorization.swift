@@ -24,14 +24,20 @@ final class RetainedModalAuthorization {
   // Same bounded smoke prerequisite is called by ComparisonObservation. It
   // checks the entire presented chain, without changing the presenter's gate.
   static func contextIsReady() -> Bool {
+    settledForegroundPresenter() != nil
+  }
+
+  // Return the same candidate the Boolean prerequisite validates, so D can pass
+  // that exact controller to HealthKit without a second window-chain lookup.
+  static func settledForegroundPresenter() -> UIViewController? {
     let windows = foregroundWindows()
     guard windows.count == 1, let window = windows.first,
-          var controller = window.rootViewController else { return false }
+          var controller = window.rootViewController else { return nil }
     while true {
       guard !controller.isBeingPresented, !controller.isBeingDismissed,
-            controller.transitionCoordinator == nil else { return false }
+            controller.transitionCoordinator == nil else { return nil }
       guard let presented = controller.presentedViewController else {
-        return controller.viewIfLoaded?.window === window
+        return controller.viewIfLoaded?.window === window ? controller : nil
       }
       controller = presented
     }

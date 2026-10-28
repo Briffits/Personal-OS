@@ -1,0 +1,6 @@
+{
+  "label": "explicit-presenter D after fresh installation",
+  "confirmed_trace": "manual tap, explicit presenter retained, request begun; background interrupted observation; no callback in inspected trace",
+  "visual_observations": "not reported",
+  "restart": "fresh process explicitly requested by user"
+}

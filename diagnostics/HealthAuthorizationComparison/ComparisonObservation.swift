@@ -1,5 +1,6 @@
 import Combine
 import HealthKit
+import HealthKitUI
 import SwiftUI
 import UIKit
 
@@ -63,6 +64,13 @@ final class ComparisonObservation: ObservableObject {
   // Kept for the observation lifetime, including timeout. The callback also
   // retains this observer until delivery; there is no API cancellation token.
   private let directStore = HKHealthStore()
+  // HealthKit's presenter property is weak. Keep the validated existing root
+  // hierarchy alive alongside the store for this one-shot diagnostic process.
+  // Never clear at callback, observation end, timeout or background interruption:
+  // none proves Apple's sheet is gone, and timeout does not cancel its request.
+  // A hosting-controller/observer retain cycle is intentional here; process
+  // termination is the cleanup boundary, not a production lifetime policy.
+  private var directPresenter: UIViewController?
 
   func beginDirectRequest() {
     guard path == .direct, !directAttempted else { return }
@@ -82,9 +90,12 @@ final class ComparisonObservation: ObservableObject {
       finish("Context prerequisite failed; no direct request issued.", deliver: false)
       return
     }
-    if RetainedModalAuthorization.contextIsReady() {
+    if let presenter = RetainedModalAuthorization.settledForegroundPresenter() {
       DiagnosticTrace.event("context.ready")
+      directPresenter = presenter
+      DiagnosticTrace.event("direct.presenter.explicit.retained")
       beginCallbackWait()
+      directStore.authorizationViewControllerPresenter = presenter
       directStore.requestPerObjectReadAuthorization(
         for: .userAnnotatedMedicationType(), predicate: nil
       ) { [self] success, error in

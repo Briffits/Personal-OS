@@ -140,6 +140,20 @@ def check():
     assert "[self] success, error" in direct
     assert "if phase == .requesting" in direct
     assert "direct.callback" in direct and "errorDomain=" in direct and "errorCode=" in direct
+    # Explicit-presenter D: same validated candidate, strongly retained past all
+    # observer finish paths because a timeout cannot cancel the native request.
+    assert "import HealthKitUI" in observer
+    assert "private var directPresenter: UIViewController?" in observer
+    assert "if let presenter = RetainedModalAuthorization.settledForegroundPresenter()" in direct
+    assert "directPresenter = presenter" in direct
+    assert 'DiagnosticTrace.event("direct.presenter.explicit.retained")' in direct
+    assert re.search(r"directStore\.authorizationViewControllerPresenter = presenter\s+"
+                     r"directStore\.requestPerObjectReadAuthorization\(", direct)
+    assert len(re.findall(r"directPresenter\s*=", observer)) == 1
+    assert len(re.findall(r"authorizationViewControllerPresenter\s*=", observer)) == 1
+    modal = (ROOT / "RetainedModalAuthorization.swift").read_text()
+    assert "static func contextIsReady() -> Bool {\n    settledForegroundPresenter() != nil\n  }" in modal
+    assert "return controller.viewIfLoaded?.window === window ? controller : nil" in modal
     app = (ROOT / "HealthAuthorizationComparisonApp.swift").read_text()
     assert app.count("observation.beginDirectRequest()") == 1
     assert 'Button("D: Request Apple medication-selection sheet once")' in app
@@ -148,6 +162,8 @@ def check():
     def release_only(text):
         return re.sub(r"  *#if DEBUG\n.*?  *#endif", "", text, flags=re.S)
     assert "requestPerObjectReadAuthorization" not in release_only(observer)
+    assert "authorizationViewControllerPresenter" not in release_only(observer)
+    assert "private var directPresenter" not in release_only(observer)
     assert 'case direct = "D"' not in release_only(observer)
     assert "beginDirectRequest" not in release_only(app)
     assert "case .success(true): self = .successTrue" in code
