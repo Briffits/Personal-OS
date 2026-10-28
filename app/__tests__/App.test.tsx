@@ -7,6 +7,7 @@ import App from '../App';
 import { layout, typography } from '../src/design-system';
 import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
+import { NativeHealthMedications } from '../src/native/NativeHealthMedications';
 import { NativeReminders } from '../src/native/NativeReminders';
 import {
   firstId,
@@ -20,6 +21,12 @@ jest.mock(
 );
 jest.mock('../src/native/NativeMedicationStorage', () => ({
   NativeMedicationStorage: { read: jest.fn(), mutate: jest.fn() },
+}));
+jest.mock('../src/native/NativeHealthMedications', () => ({
+  NativeHealthMedications: {
+    read: jest.fn().mockResolvedValue([]),
+    requestAccess: jest.fn(),
+  },
 }));
 jest.mock('../src/native/NativeReminders', () => ({
   NativeReminders: {
@@ -96,6 +103,7 @@ function expectNoNativeOperations() {
     NativeMedicationStorage,
     NativePrescriptionDocuments,
     NativeReminders,
+    NativeHealthMedications,
   ]) {
     for (const operation of Object.values(boundary)) {
       expect(operation).not.toHaveBeenCalled();
@@ -471,3 +479,17 @@ test.each([
     expectNoNativeOperations();
   },
 );
+
+test('Health medications is isolated from stock and prescriptions and returns to Library', async () => {
+  await press('Library tab');
+  expectNoNativeOperations();
+  await press('Open Apple Health medications');
+  expectHeading('Apple Health medications');
+  expect(NativeHealthMedications.read).toHaveBeenCalledTimes(1);
+  expect(NativeHealthMedications.requestAccess).not.toHaveBeenCalled();
+  expect(NativeMedicationStorage.read).not.toHaveBeenCalled();
+  expect(NativeMedicationStorage.mutate).not.toHaveBeenCalled();
+  expect(NativePrescriptionDocuments.read).not.toHaveBeenCalled();
+  await press('Back to Library');
+  expectHeading('Library');
+});

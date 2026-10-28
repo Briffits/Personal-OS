@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomNavigation, {
   type AppTab,
 } from './src/components/BottomNavigation';
+import HealthMedicationsScreen from './src/screens/HealthMedicationsScreen';
 import LibraryScreen from './src/screens/LibraryScreen';
 import MedicationScreen from './src/screens/MedicationScreen';
 import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
@@ -19,7 +20,8 @@ type AppScreen =
   | 'medication'
   | 'prescriptionWallet'
   | 'settings'
-  | 'reminders';
+  | 'reminders'
+  | 'healthMedications';
 
 function App() {
   const theme = usePersonalOSTheme();
@@ -32,6 +34,9 @@ function App() {
   };
 
   const renderScreen = () => {
+    if (activeScreen === 'healthMedications') {
+      return <HealthMedicationsScreen onBack={() => setActiveScreen('main')} />;
+    }
     if (activeScreen === 'reminders') {
       return <RemindersScreen onBack={() => setActiveScreen('main')} />;
     }
@@ -58,6 +63,7 @@ function App() {
       case 'Library':
         return (
           <LibraryScreen
+            onOpenHealthMedications={() => setActiveScreen('healthMedications')}
             onOpenMedication={() => setActiveScreen('medication')}
             onOpenPrescriptionWallet={() =>
               setActiveScreen('prescriptionWallet')
