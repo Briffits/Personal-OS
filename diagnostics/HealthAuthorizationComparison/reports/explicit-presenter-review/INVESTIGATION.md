@@ -120,3 +120,57 @@ requesting was already tested by historical D; explicit selection is the variant
 
 No further attempt, access request, install, launch or reset occurred during this
 consolidation. Production/v2, Metro, storage and Health data were not changed.
+
+
+## Same-build repeat — completed, no sheet (2026-10-28)
+
+This supplements the earlier records without changing their evidence. A fresh
+process was explicitly user-authorized using the same installed explicit-presenter
+D build, with no rebuild, reinstall, permission reset or configuration change.
+Console verified path=D. The user confirmed Path D, No request started and a
+responsive interaction counter before the assistant instructed one manual tap.
+There was no automatic request or retry.
+
+**Human observations:** the phone remained unlocked, the app foregrounded and
+uninterrupted throughout; no sheet appeared; the counter remained responsive.
+Sheet action and disappearance are not applicable. These confirmations are
+separate from the callback and lifecycle logs.
+
+**Trace:** one direct.button.tap, context.ready and
+direct.presenter.explicit.retained preceded request.begin at
+284167.437514625. Callback success=true, errorDomain=none, errorCode=none;
+raw callback at 284167.473097875 (+0.035583 s), main callback at
+284167.473198625 (+0.035684 s, rounded **0.036 s**). Observation began at
+284167.47322658333 and ended with root retained at 284177.9700554167
+(**10.497 s**). cleanup.rootRetained and run.ended followed; post-observation
+counter taps were logged. No timeout or inactive/background event occurred in
+the request/observation interval, or from root appearance through run.ended.
+
+The preserved REPEAT1_COMPLETED.log is a full snapshot of the sanitized capture,
+not a truncated trial-only extract. It also includes later lifecycle events:
+scene.inactive at 284285.163387625 and scene.background at 284285.2199689167,
+more than 107 seconds after run.ended at 284177.97031475004, plus subsequent
+foreground/background activity. Their cause is unknown. They are outside the
+completed trial and do not contradict the user's uninterrupted-trial report.
+REPEAT1_RECORD.json and REPEAT1_RESULT.md preserve the earlier completed-trial
+record; references there to no captured lifecycle interruption concern the trial
+interval, not these later events. No further request is present in this snapshot.
+
+Comparison: the previous completed explicit-presenter trial showed the sheet;
+the user tapped Don't Allow, it disappeared and the counter responded. That
+trial returned success=true without error after 11.326 s and observed for 10.485 s.
+This same-build repeat showed no sheet and returned success=true without error
+at 0.036 s, with a completed 10.497 s observation window.
+
+**Conclusion only:** explicit presenter selection was insufficient to ensure
+repeatable presentation in these observations. No permission-state, causation or
+read-access inference is made. The installation began fresh after deletion of
+the prior diagnostic; continuity with the earlier HealthKit state is unknown.
+Both completed trials follow the earlier interrupted explicit-presenter request.
+Historical D2's pre-request background/foreground cycle remains a separate
+procedural difference; it is not a matched control. **Read access remains
+untested; FB25287175 remains unresolved.**
+
+No additional device operation was performed to preserve this repeat. Source,
+configuration and earlier logs/reports are unchanged. The adjacent Feedback
+addendum is prepared text only and has not been submitted.

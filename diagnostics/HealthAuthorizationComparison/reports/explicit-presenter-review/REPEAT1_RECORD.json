@@ -1,0 +1,36 @@
+{
+  "label": "explicit-presenter D repeat 1 \u2014 same installed build",
+  "human_confirmed": {
+    "before_request": "Path D, No request started, counter increments",
+    "sheet_appeared": false,
+    "counter_responsive_afterward": true,
+    "phone_unlocked_and_app_foregrounded_without_interruption": true
+  },
+  "human_sheet_action": "not applicable; no sheet reported",
+  "human_disappearance": "not applicable; no sheet reported",
+  "human_interruption_status": "User confirmed phone remained unlocked and app foregrounded without interruption throughout.",
+  "trace_confirmed": {
+    "path": "D",
+    "manual_request_count": 1,
+    "explicit_presenter_event": true,
+    "callback_success": true,
+    "error_domain": "none",
+    "error_code": "none",
+    "request_to_raw_callback_seconds": 0.03558324999175966,
+    "request_to_main_callback_seconds": 0.03568400000222027,
+    "observation_seconds": 10.496828833362088,
+    "observation_completed": true,
+    "root_retained": true,
+    "post_observation_interaction": true,
+    "timeout_logged": false,
+    "inactive_or_background_logged_during_captured_trial": false
+  },
+  "limitations": [
+    "No-sheet immediate-success behavior persists with explicit presenter selection in this repeat",
+    "No permission-state or causation inference; read access untested",
+    "Same installed build, fresh process; no rebuild, reinstall or reset",
+    "Prior fresh installation and intervening requests remain part of history",
+    "FB25287175 unresolved"
+  ],
+  "additional_attempt_performed": false
+}

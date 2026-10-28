@@ -1,0 +1,25 @@
+[NativeHealthComparison] path=D uptime=284120.7840819167 main=true root.appear
+[NativeHealthComparison] path=D uptime=284121.03164195834 main=true scene.active
+[NativeHealthComparison] path=D uptime=284130.59933583334 main=true interaction.tap
+[NativeHealthComparison] path=D uptime=284158.4675577083 main=true interaction.tap
+[NativeHealthComparison] path=D uptime=284167.4367158334 main=true direct.button.tap
+[NativeHealthComparison] path=D uptime=284167.4374270417 main=true context.ready
+[NativeHealthComparison] path=D uptime=284167.4374684167 main=true direct.presenter.explicit.retained
+[NativeHealthComparison] path=D uptime=284167.437514625 main=true request.begin
+[NativeHealthComparison] path=D uptime=284167.473097875 main=false callback.raw outcome=successTrue
+[NativeHealthComparison] path=D uptime=284167.4731232917 main=false direct.callback success=true errorDomain=none errorCode=none
+[NativeHealthComparison] path=D uptime=284167.473198625 main=true callback.main outcome=successTrue
+[NativeHealthComparison] path=D uptime=284167.47322658333 main=true observation.begin
+[NativeHealthComparison] path=D uptime=284177.9700554167 main=true observation.end.rootRetained
+[NativeHealthComparison] path=D uptime=284177.9702898334 main=true cleanup.rootRetained
+[NativeHealthComparison] path=D uptime=284177.97031475004 main=true run.ended
+[NativeHealthComparison] path=D uptime=284195.0243887917 main=true interaction.tap
+[NativeHealthComparison] path=D uptime=284195.4582815417 main=true interaction.tap
+[NativeHealthComparison] path=D uptime=284195.90755245835 main=true interaction.tap
+[NativeHealthComparison] path=D uptime=284285.163387625 main=true scene.inactive
+[NativeHealthComparison] path=D uptime=284285.20579483337 main=true scene.active
+[NativeHealthComparison] path=D uptime=284285.2199689167 main=true scene.background
+[NativeHealthComparison] path=D uptime=284332.7219281667 main=true scene.active
+[NativeHealthComparison] path=D uptime=284332.73881141667 main=true scene.inactive
+[NativeHealthComparison] path=D uptime=284333.91972558334 main=true scene.active
+[NativeHealthComparison] path=D uptime=284333.93060616666 main=true scene.background
