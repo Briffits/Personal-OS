@@ -1,5 +1,5 @@
 // Standalone native tests; no real medication data or production Keychain access.
-// swiftc app/ios/MedicationCollectionStorage.swift app/ios/tests/MedicationCollectionStorageTests.swift -o /tmp/medication-tests
+// Run from repository root: bash app/ios/tests/run-medication-checks.sh
 import Foundation
 
 private let firstID = "11111111-1111-4111-8111-111111111111"
@@ -55,6 +55,16 @@ private final class FakeKeychain: MedicationKeychainAccess {
 struct MedicationCollectionStorageTests {
   static func main() throws {
     let tests: [(String, () throws -> Void)] = [
+      ("native/JS string, timestamp and numeric boundaries agree", validationAgreement),
+      ("every permitted mutation preserves unrelated frozen v2 fields", mutationPreservation),
+      ("frozen v2 bytes, field preservation and unsupported sources", frozenV2),
+      ("empty/multi/pending migration boundaries and uncertain restart", migrationBoundaries),
+      ("unsupported versions and malformed data block reads and writes", versionFailures),
+      ("v1 upgrade preserves all data and is retry-safe", upgradeV1),
+      ("fractional baselines, additions and correction", stockV2),
+      ("failed baseline replacement preserves legacy until publication", baselineFailure),
+      ("v2 malformed stock state fails closed", malformedStockV2),
+      ("prescription unlink preserves all v2 stock fields", unlinkV2),
       ("migration matrix and legacy byte preservation", migration),
       ("absent, invalid and inaccessible legacy data are distinct", invalidLegacy),
       ("interrupted initialization and lost response", interruptedInitialization),
@@ -86,7 +96,7 @@ struct MedicationCollectionStorageTests {
         let old = keychain.entries
         let state = try store(keychain).read()
         if let name = name {
-          try check(state.records == [MedicationRecord(id: firstID, displayName: name, stock: stock, prescriptionId: nil)], "Migration changed actual values")
+          try check(state.records == [MedicationRecord(id: firstID, displayName: name, prescriptionId: nil, legacyRecordedStock: stock.map(Double.init))], "Migration changed actual values")
           try check(state.pendingLegacy == nil, "Named medication must be ready")
         } else if let stock = stock {
           try check(state.records.isEmpty && state.pendingLegacy == PendingLegacyMedication(id: firstID, stock: stock), "Stock-only data needs a name")
@@ -101,7 +111,7 @@ struct MedicationCollectionStorageTests {
         try check(payload["pendingLegacy"] != nil, "Explicit null pending key required")
         if let record = (payload["records"] as? [[String: Any]])?.first {
           try check(record["prescriptionId"] is NSNull, "Migration cannot infer a link")
-          try check(record["stock"] != nil, "Explicit null stock key required")
+          try check(record["legacyRecordedStock"] != nil, "Explicit null stock key required")
         }
       }
     }
@@ -155,7 +165,7 @@ struct MedicationCollectionStorageTests {
     let restarted = try store(keychain).read()
     try check(restarted == state, "Pending identity lost on restart")
     let next = try storage.mutate(revision: 0, command: ["type": "completeLegacy", "displayName": " Named example "])
-    try check(next.records == [MedicationRecord(id: firstID, displayName: "Named example", stock: 7, prescriptionId: nil)], "Completion changed preserved data")
+    try check(next.records == [MedicationRecord(id: firstID, displayName: "Named example", prescriptionId: nil, legacyRecordedStock: 7)], "Completion changed preserved data")
     try check(next.pendingLegacy == nil, "Pending not cleared")
     try rejects(.staleState) { _ = try storage.mutate(revision: 0, command: ["type": "completeLegacy", "displayName": "Duplicate"]) }
   }
@@ -167,11 +177,11 @@ struct MedicationCollectionStorageTests {
     state = try storage.mutate(revision: state.revision, command: ["type": "edit", "id": id, "displayName": "Renamed", "prescriptionId": prescriptionID])
     state = try storage.mutate(revision: state.revision, command: ["type": "create", "displayName": "Renamed", "prescriptionId": prescriptionID])
     let second = state.records[1]
-    try check(second.id != id && second.stock == nil && second.prescriptionId == prescriptionID, "New record identity/defaults incorrect")
-    state = try storage.mutate(revision: state.revision, command: ["type": "setStock", "id": id, "stock": 15])
+    try check(second.id != id && second.stockBaseline == nil && second.legacyRecordedStock == nil && second.prescriptionId == prescriptionID, "New record identity/defaults incorrect")
+    state = try storage.mutate(revision: state.revision, command: ["type": "establishBaseline", "id": id, "quantity": 15])
     try check(state.records[0].prescriptionId == prescriptionID && state.records[0].id == id, "Stock changed identity/link")
     state = try storage.mutate(revision: state.revision, command: ["type": "edit", "id": id, "displayName": "Renamed", "prescriptionId": otherPrescriptionID])
-    try check(state.records[0].stock == 15 && state.records[0].prescriptionId == otherPrescriptionID, "Relinking changed stock")
+    try check(state.records[0].stockBaseline?.quantity == 15 && state.records[0].prescriptionId == otherPrescriptionID, "Relinking changed stock")
     state = try storage.mutate(revision: state.revision, command: ["type": "edit", "id": id, "displayName": "Renamed", "prescriptionId": NSNull()])
     try check(state.records[0].id == id && state.records[0].prescriptionId == nil, "Unlink changed identity")
     state = try storage.mutate(revision: state.revision, command: ["type": "remove", "id": id])
@@ -194,11 +204,11 @@ struct MedicationCollectionStorageTests {
     let keychain = FakeKeychain(); keychain.legacy(name: "Example", stock: "{\"estimatedStock\":12}")
     let storage = store(keychain); _ = try storage.read()
     keychain.failVerification = true
-    try rejects(.commitUncertain) { _ = try storage.mutate(revision: 0, command: ["type": "setStock", "id": firstID, "stock": 15]) }
+    try rejects(.commitUncertain) { _ = try storage.mutate(revision: 0, command: ["type": "establishBaseline", "id": firstID, "quantity": 15]) }
     keychain.readFailure = nil; keychain.failVerification = false
     let state = try store(keychain).read()
-    try check(state.revision == 1 && state.records[0].stock == 15, "Lost acknowledgement rolled back")
-    try rejects(.staleState) { _ = try storage.mutate(revision: 0, command: ["type": "setStock", "id": firstID, "stock": 15]) }
+    try check(state.revision == 1 && state.records[0].stockBaseline?.quantity == 15, "Lost acknowledgement rolled back")
+    try rejects(.staleState) { _ = try storage.mutate(revision: 0, command: ["type": "establishBaseline", "id": firstID, "quantity": 15]) }
     try check(keychain.writes.count == 2, "Stale retry wrote again")
   }
 
@@ -212,14 +222,13 @@ struct MedicationCollectionStorageTests {
   }
 
   static func malformedCollection() throws {
-    let base: [String: Any] = ["schemaVersion": 1, "revision": 0, "records": [], "pendingLegacy": NSNull()]
-    let record = MedicationRecord(id: firstID, displayName: "Example", stock: 0, prescriptionId: nil).payload
-    var cases = [base.merging(["schemaVersion": 2]) { _, new in new },
-                 base.merging(["revision": true]) { _, new in new },
+    let base: [String: Any] = ["schemaVersion": 2, "revision": 0, "records": [], "pendingLegacy": NSNull()]
+    let record = MedicationRecord(id: firstID, displayName: "Example", prescriptionId: nil, legacyRecordedStock: 0).payload
+    var cases = [base.merging(["revision": true]) { _, new in new },
                  base.merging(["records": [record, record]]) { _, new in new },
                  base.merging(["pendingLegacy": ["id": firstID, "stock": 0, "prescriptionId": prescriptionID]]) { _, new in new }]
     var missing = base; missing.removeValue(forKey: "pendingLegacy"); cases.append(missing)
-    for field in ["stock", "prescriptionId"] {
+    for field in ["legacyRecordedStock", "stockBaseline", "stockAdditions", "lowStockThreshold", "healthKitLink", "stockUnit", "prescriptionId"] {
       var invalid = record; invalid.removeValue(forKey: field)
       cases.append(base.merging(["records": [invalid]]) { _, new in new })
     }
@@ -238,15 +247,16 @@ struct MedicationCollectionStorageTests {
     let keychain = FakeKeychain(); keychain.legacy(name: "Example", stock: nil)
     let storage = store(keychain); _ = try storage.read()
     let old = keychain.entries
-    for stock in [true, -1, 1.5, Double.nan, Double.infinity, -Double.infinity, "2", NSNull(), 9_007_199_254_740_992] as [Any] {
-      try rejects(.invalidInput) { _ = try storage.mutate(revision: 0, command: ["type": "setStock", "id": firstID, "stock": stock]) }
+    for stock in [true, -1, Double.nan, Double.infinity, -Double.infinity, "2", NSNull(), 9_007_199_254_740_992] as [Any] {
+      try rejects(.invalidInput) { _ = try storage.mutate(revision: 0, command: ["type": "establishBaseline", "id": firstID, "quantity": stock]) }
     }
     try rejects(.invalidInput) { _ = try storage.mutate(revision: 0, command: ["type": "edit", "id": firstID, "displayName": " ", "prescriptionId": NSNull()]) }
     try rejects(.invalidInput) { _ = try storage.mutate(revision: 0, command: ["type": "edit", "id": firstID, "displayName": "Example", "prescriptionId": [prescriptionID]]) }
     try rejects(.notFound) { _ = try storage.mutate(revision: 0, command: ["type": "remove", "id": prescriptionID]) }
+    try rejects(.invalidInput) { _ = try storage.mutate(revision: 0, command: ["type": "setStock", "id": firstID, "stock": 999]) }
     try check(keychain.entries == old, "Invalid command changed durable data")
     keychain.entries.removeValue(forKey: MedicationCollectionStorage.service)
-    try rejects(.notFound) { _ = try storage.mutate(revision: 0, command: ["type": "setStock", "id": firstID, "stock": 0]) }
+    try rejects(.notFound) { _ = try storage.mutate(revision: 0, command: ["type": "establishBaseline", "id": firstID, "quantity": 0]) }
     try check(keychain.entries[MedicationCollectionStorage.service] == nil, "Mutation recreated missing collection")
   }
 
@@ -256,7 +266,7 @@ struct MedicationCollectionStorageTests {
     let resultLock = NSLock(); var successes = 0; var failures = 0
     DispatchQueue.concurrentPerform(iterations: 12) { _ in
       do {
-        _ = try store(keychain).mutate(revision: 0, command: ["type": "setStock", "id": firstID, "stock": 4])
+        _ = try store(keychain).mutate(revision: 0, command: ["type": "establishBaseline", "id": firstID, "quantity": 4])
         resultLock.lock(); successes += 1; resultLock.unlock()
       } catch {
         resultLock.lock(); failures += 1; resultLock.unlock()
@@ -285,7 +295,7 @@ struct MedicationCollectionStorageTests {
       for index in 0..<count {
         state = try storage.mutate(revision: state.revision, command: ["type": "create", "displayName": "Synthetic \(index)", "prescriptionId": prescriptionID])
         if index > 0 {
-          state = try storage.mutate(revision: state.revision, command: ["type": "setStock", "id": state.records[index].id, "stock": index - 1])
+          state = try storage.mutate(revision: state.revision, command: ["type": "establishBaseline", "id": state.records[index].id, "quantity": index - 1])
         }
       }
       state = try storage.mutate(revision: state.revision, command: ["type": "create", "displayName": "Other", "prescriptionId": otherPrescriptionID])
@@ -330,6 +340,323 @@ struct MedicationCollectionStorageTests {
     }
     keychain.readFailure = nil; keychain.failVerification = false
     let restored = try MedicationCollectionStorage(keychain: keychain).read()
-    try check(restored.records == before.records.map { MedicationRecord(id: $0.id, displayName: $0.displayName, stock: $0.stock, prescriptionId: nil) }, "Uncertain unlink must retain a whole committed snapshot")
+    try check(restored.records == before.records.map { original in var result = original; result.prescriptionId = nil; return result }, "Uncertain unlink must retain a whole committed snapshot")
   }
+  static func v1Bytes(stock: Any = 12, pending: Bool = false) throws -> Data {
+    let records: [[String: Any]] = pending ? [] : [["id": firstID, "displayName": "Synthetic", "stock": stock, "prescriptionId": prescriptionID]]
+    return try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "revision": 8, "records": records,
+      "pendingLegacy": pending ? ["id": firstID, "stock": stock, "prescriptionId": NSNull()] as Any : NSNull()])
+  }
+  static func upgradeV1() throws {
+    for value in [NSNull(), 0, 12, MedicationCollectionStorage.maximumInteger] as [Any] {
+      let keychain = FakeKeychain()
+      let source = try v1Bytes(stock: value)
+      keychain.entries[MedicationCollectionStorage.service] = source
+      keychain.failWrites = true
+      try rejects(.writeFailed) { _ = try store(keychain).read() }
+      try check(keychain.entries[MedicationCollectionStorage.service] == source, "Failed upgrade changed v1 bytes")
+      keychain.failWrites = false; keychain.failVerification = true
+      try rejects(.commitUncertain) { _ = try store(keychain).read() }
+      keychain.failVerification = false; keychain.readFailure = nil
+      let state = try store(keychain).read()
+      try check(state.schemaVersion == 2 && state.revision == 9, "Upgrade must increment revision once")
+      try check(state.records[0].id == firstID && state.records[0].prescriptionId == prescriptionID, "Identity/link lost")
+      try check(state.records[0].stockBaseline == nil && state.records[0].stockAdditions.isEmpty, "Migration fabricated baseline")
+      let expected = value is NSNull ? nil : (value as? NSNumber)?.doubleValue
+      try check(state.records[0].legacyRecordedStock == expected, "Migration changed stock")
+      _ = try store(keychain).read()
+      try check(keychain.writes.count == 1, "Migration replayed")
+      try rejects(.staleState) { _ = try store(keychain).mutate(revision: 8, command: ["type": "remove", "id": firstID]) }
+    }
+    let keychain = FakeKeychain()
+    keychain.entries[MedicationCollectionStorage.service] = try v1Bytes(stock: 0, pending: true)
+    let state = try store(keychain).read()
+    try check(state.pendingLegacy?.stock == 0 && state.pendingLegacy?.id == firstID && state.records.isEmpty, "Pending legacy lost")
+    keychain.entries[MedicationCollectionStorage.service] = try v1Bytes(stock: 0.5)
+    try rejects(.invalidRecord) { _ = try store(keychain).read() }
+  }
+  static func stockV2() throws {
+    let keychain = FakeKeychain(); keychain.legacy(name: "Synthetic", stock: "{\"estimatedStock\":12}")
+    let decimals = FakeKeychain(); decimals.legacy(name: "Synthetic", stock: "{\"estimatedStock\":0}")
+    let decimalStore = MedicationCollectionStorage(keychain: decimals)
+    var decimalState = try decimalStore.read(); let decimalID = decimalState.records[0].id
+    for amount in [0.1, 0.2] {
+      decimalState = try decimalStore.mutate(revision: decimalState.revision,
+        command: ["type": "addStock", "id": decimalID, "quantity": amount])
+    }
+    try check(decimalState.records[0].legacyRecordedStock == 0.3, "Legacy additions persisted rounding noise")
+    let clock = Date(timeIntervalSince1970: 1_767_225_600)
+    let storage = MedicationCollectionStorage(keychain: keychain, now: { clock })
+    var state = try storage.read(); let id = state.records[0].id
+    state = try storage.mutate(revision: state.revision, command: ["type": "addStock", "id": id, "quantity": 0.5])
+    try check(state.records[0].legacyRecordedStock == 12.5 && state.records[0].stockBaseline == nil, "Legacy addition fabricated baseline")
+    state = try storage.mutate(revision: state.revision, command: ["type": "establishBaseline", "id": id, "quantity": 4.5])
+    let baseline = state.records[0].stockBaseline!
+    let rolledBackClock = MedicationCollectionStorage(keychain: keychain, now: { clock.addingTimeInterval(-1) })
+    try rejects(.invalidInput) { _ = try rolledBackClock.mutate(revision: state.revision, command: ["type": "addStock", "id": id, "quantity": 1]) }
+    try check(state.records[0].legacyRecordedStock == nil && baseline.quantity == 4.5, "Baseline not authoritative")
+    state = try storage.mutate(revision: state.revision, command: ["type": "addStock", "id": id, "quantity": 0.5])
+    try check(state.records[0].stockBaseline == baseline && state.records[0].stockAdditions[0].baselineId == baseline.id, "Addition rewrote baseline")
+    state = try storage.mutate(revision: state.revision, command: ["type": "establishBaseline", "id": id, "quantity": 0])
+    try check(state.records[0].stockBaseline?.id != baseline.id && state.records[0].stockAdditions.isEmpty, "Correction scope incorrect")
+    let restored = try MedicationCollectionStorage(keychain: keychain).read()
+    try check(restored == state, "V2 round trip changed data")
+    let bytes = keychain.entries[MedicationCollectionStorage.service]!
+    let object = try JSONSerialization.jsonObject(with: bytes) as! [String: Any]
+    let record = (object["records"] as! [[String: Any]])[0]
+    try check(record["stock"] == nil && record["estimatedStock"] == nil, "Persisted derived balance")
+  }
+  static func baselineFailure() throws {
+    let keychain = FakeKeychain(); keychain.legacy(name: "Synthetic", stock: "{\"estimatedStock\":12}")
+    let storage = MedicationCollectionStorage(keychain: keychain)
+    let state = try storage.read(); let before = keychain.entries
+    let command: [String: Any] = ["type": "establishBaseline", "id": state.records[0].id, "quantity": 2.5]
+    keychain.failWrites = true
+    try rejects(.writeFailed) { _ = try storage.mutate(revision: state.revision, command: command) }
+    try check(before == keychain.entries, "Failure cleared legacy stock")
+    keychain.failWrites = false; keychain.failVerification = true
+    try rejects(.commitUncertain) { _ = try storage.mutate(revision: state.revision, command: command) }
+    keychain.failVerification = false; keychain.readFailure = nil
+    let restored = try storage.read()
+    try check(restored.records[0].stockBaseline?.quantity == 2.5 && restored.records[0].legacyRecordedStock == nil, "Uncertain publication not recovered")
+    try rejects(.staleState) { _ = try storage.mutate(revision: state.revision, command: command) }
+    for (key, value) in before where key != MedicationCollectionStorage.service { try check(keychain.entries[key] == value, "Singleton recovery bytes changed") }
+  }
+  static func malformedStockV2() throws {
+    let record = MedicationRecord(id: firstID, displayName: "Synthetic", prescriptionId: nil).payload
+    let baseline: [String: Any] = ["id": prescriptionID, "quantity": 1.5, "recordedAt": "2026-01-01T00:00:00.000Z", "healthKitConceptReference": NSNull()]
+    let changes: [[String: Any]] = [
+      ["stockUnit": "mg"], ["lowStockThreshold": true], ["legacyRecordedStock": -1],
+      ["stockBaseline": baseline, "legacyRecordedStock": 1],
+      ["stockBaseline": baseline.merging(["recordedAt": "2026-02-30T00:00:00.000Z"]) { _, new in new }],
+      ["stockAdditions": [["id": prescriptionID, "baselineId": firstID, "quantity": 1, "recordedAt": "2026-01-01T00:00:00.000Z"]]]
+    ]
+    for change in changes {
+      let keychain = FakeKeychain()
+      let bytes = try JSONSerialization.data(withJSONObject: ["schemaVersion": 2, "revision": 0,
+        "records": [record.merging(change) { _, new in new }], "pendingLegacy": NSNull()])
+      keychain.entries[MedicationCollectionStorage.service] = bytes
+      try rejects(.invalidRecord) { _ = try store(keychain).read() }
+      try check(keychain.entries[MedicationCollectionStorage.service] == bytes && keychain.writes.isEmpty, "Malformed data overwritten")
+    }
+  }
+
+  static func unlinkV2() throws {
+    let keychain = FakeKeychain()
+    let baseline = StockBaseline(id: otherPrescriptionID, quantity: 3.5,
+      recordedAt: "2026-01-01T00:00:00.000Z", healthKitConceptReference: "synthetic-concept")
+    let addition = StockAddition(id: prescriptionID, baselineId: baseline.id, quantity: 0.5,
+      recordedAt: "2026-01-02T00:00:00.000Z")
+    let record = MedicationRecord(id: firstID, displayName: "Synthetic", prescriptionId: prescriptionID,
+      stockBaseline: baseline, stockAdditions: [addition], lowStockThreshold: 1.5,
+      healthKitConceptReference: "synthetic-concept")
+    let source = MedicationCollection(revision: 4, records: [record], pendingLegacy: nil)
+    keychain.entries[MedicationCollectionStorage.service] = try JSONSerialization.data(withJSONObject: source.payload)
+    let result = try store(keychain).mutate(revision: 4, command: ["type": "unlinkPrescription", "prescriptionId": prescriptionID])
+    var expected = record; expected.prescriptionId = nil
+    try check(result.records == [expected], "Unlink changed stock or Health fields")
+    let restored = try store(keychain).read()
+    try check(restored == result, "Unlink round trip changed fields")
+  }
+
+  static func fixtureData() throws -> Data {
+    try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
+  }
+  static func frozenV2() throws {
+    let keychain = FakeKeychain()
+    let bytes = try fixtureData()
+    keychain.entries[MedicationCollectionStorage.service] = bytes
+    keychain.legacy(name: "Stale synthetic", stock: "{\"estimatedStock\":999}")
+    let original = keychain.entries
+    let storage = MedicationCollectionStorage(keychain: keychain, now: { Date(timeIntervalSince1970: 1767225600) })
+    let state = try storage.read()
+    _ = try MedicationCollectionStorage(keychain: keychain).read()
+    try check(keychain.entries == original && keychain.writes.isEmpty, "V2 reads must preserve exact bytes")
+    for index in [1, 2] {
+      for type in ["addStock", "establishBaseline"] {
+        try rejects(.unsupportedStockSource) {
+          _ = try storage.mutate(revision: state.revision, command: ["type": type, "id": state.records[index].id, "quantity": 1])
+        }
+      }
+    }
+    // Also block same-token links and links without baselines: equality is not authorization.
+    for baselineSource in [nil, "synthetic:same"] as [String?] {
+      var linked = state
+      linked.records[0].healthKitConceptReference = "synthetic:same"
+      linked.records[0].stockBaseline = baselineSource.map { StockBaseline(id: otherPrescriptionID, quantity: 2, recordedAt: "2026-01-01T00:00:00.000Z", healthKitConceptReference: $0) }
+      linked.records[0].stockAdditions = []
+      keychain.entries[MedicationCollectionStorage.service] = try JSONSerialization.data(withJSONObject: linked.payload)
+      for type in ["addStock", "establishBaseline"] {
+        try rejects(.unsupportedStockSource) { _ = try storage.mutate(revision: state.revision, command: ["type": type, "id": linked.records[0].id, "quantity": 1]) }
+      }
+    }
+    keychain.entries[MedicationCollectionStorage.service] = bytes
+    try check(keychain.writes.isEmpty, "Unsupported source wrote")
+    var edited = try storage.mutate(revision: state.revision, command: ["type": "edit", "id": state.records[1].id, "displayName": "Synthetic renamed", "prescriptionId": prescriptionID])
+    var expected = state; expected.revision += 1; expected.records[1].displayName = "Synthetic renamed"
+    try check(edited == expected, "Edit lost v2 fields")
+    edited = try storage.mutate(revision: edited.revision, command: ["type": "unlinkPrescription", "prescriptionId": prescriptionID])
+    expected.revision += 1
+    for index in expected.records.indices { expected.records[index].prescriptionId = nil }
+    try check(edited == expected, "Unlink lost v2 fields")
+    let beforeAdd = edited
+    keychain.loseAcknowledgement = true
+    try rejects(.commitUncertain) { _ = try storage.mutate(revision: beforeAdd.revision, command: ["type": "addStock", "id": beforeAdd.records[0].id, "quantity": 0.25]) }
+    keychain.loseAcknowledgement = false
+    let restored = try MedicationCollectionStorage(keychain: keychain).read()
+    try check(restored.records[0].stockAdditions.count == 2, "Lost addition was not fully published")
+    try check(Array(restored.records.dropFirst()) == Array(beforeAdd.records.dropFirst()), "Addition changed other records")
+    try check(restored.records[0].lowStockThreshold == 0 && restored.records[0].stockBaseline == beforeAdd.records[0].stockBaseline, "Addition lost baseline or threshold")
+    let writes = keychain.writes.count
+    try rejects(.staleState) { _ = try storage.mutate(revision: beforeAdd.revision, command: ["type": "addStock", "id": beforeAdd.records[0].id, "quantity": 0.25]) }
+    try check(keychain.writes.count == writes, "Addition replayed")
+    try check(keychain.entries[MedicationCollectionStorage.legacyNameService] == original[MedicationCollectionStorage.legacyNameService], "Legacy name changed")
+  }
+
+  static func migrationBoundaries() throws {
+    let values: [Any] = [NSNull(), 0, MedicationCollectionStorage.maximumInteger]
+    let records: [[String: Any]] = values.enumerated().map { index, stock in
+      ["id": "0000000\(index + 1)-1111-4111-8111-111111111111", "displayName": " Synthetic \(index) ", "stock": stock, "prescriptionId": index == 0 ? NSNull() : prescriptionID as Any]
+    }
+    let variants: [[String: Any]] = [
+      ["records": [], "pendingLegacy": NSNull()],
+      ["records": records, "pendingLegacy": NSNull()],
+      ["records": [], "pendingLegacy": ["id": firstID, "stock": MedicationCollectionStorage.maximumInteger, "prescriptionId": NSNull()]]
+    ]
+    for variant in variants {
+      let object = variant.merging(["schemaVersion": 1, "revision": MedicationCollectionStorage.maximumInteger - 1]) { _, new in new }
+      let bytes = try JSONSerialization.data(withJSONObject: object)
+      let keychain = FakeKeychain(); keychain.legacy(name: "Stale", stock: "{\"estimatedStock\":2}")
+      keychain.entries[MedicationCollectionStorage.service] = bytes
+      let original = keychain.entries
+      keychain.failWrites = true
+      try rejects(.writeFailed) { _ = try store(keychain).read() }
+      try check(keychain.entries == original, "Failed migration changed bytes")
+      keychain.failWrites = false; keychain.loseAcknowledgement = true
+      try rejects(.commitUncertain) { _ = try store(keychain).read() }
+      keychain.loseAcknowledgement = false
+      let state = try store(keychain).read()
+      _ = try store(keychain).read()
+      try check(state.schemaVersion == 2 && state.revision == MedicationCollectionStorage.maximumInteger && keychain.writes.count == 1, "Migration revision/retry incorrect")
+      if !state.records.isEmpty {
+        for (index, record) in state.records.enumerated() {
+          try check(record.id == records[index]["id"] as? String && record.displayName == records[index]["displayName"] as? String, "Identity/name changed")
+          try check(record.prescriptionId == (index == 0 ? nil : prescriptionID), "Link changed")
+          try check(record.legacyRecordedStock == (index == 0 ? nil : Double(index == 1 ? 0 : MedicationCollectionStorage.maximumInteger)), "Boundary stock changed")
+          try check(record.stockBaseline == nil && record.stockAdditions.isEmpty && record.lowStockThreshold == nil && record.healthKitConceptReference == nil, "Migration invented state")
+        }
+        // Feed the actual published migration to the pinned old reader executable.
+        try keychain.entries[MedicationCollectionStorage.service]!.write(to: URL(fileURLWithPath: CommandLine.arguments[2]))
+      } else if let pending = state.pendingLegacy {
+        try check(pending.id == firstID && pending.stock == MedicationCollectionStorage.maximumInteger, "Pending boundary changed")
+      }
+      try rejects(.staleState) { _ = try store(keychain).mutate(revision: state.revision, command: ["type": "create", "displayName": "Synthetic", "prescriptionId": NSNull()]) }
+      let exhausted = object.merging(["revision": MedicationCollectionStorage.maximumInteger]) { _, new in new }
+      let exhaustedBytes = try JSONSerialization.data(withJSONObject: exhausted)
+      keychain.entries[MedicationCollectionStorage.service] = exhaustedBytes
+      try rejects(.staleState) { _ = try store(keychain).read() }
+      try check(keychain.entries[MedicationCollectionStorage.service] == exhaustedBytes && keychain.writes.count == 1, "Exhausted migration wrote")
+      for (key, value) in original where key != MedicationCollectionStorage.service { try check(keychain.entries[key] == value, "Migration changed recovery data") }
+    }
+  }
+
+  static func versionFailures() throws {
+    for version in [0, 3, MedicationCollectionStorage.maximumInteger] {
+      let keychain = FakeKeychain(); keychain.legacy(name: "Stale", stock: "{\"estimatedStock\":9}")
+      keychain.entries[MedicationCollectionStorage.service] = try JSONSerialization.data(withJSONObject: ["schemaVersion": version])
+      let before = keychain.entries
+      try rejects(.unsupportedVersion) { _ = try store(keychain).read() }
+      try rejects(.unsupportedVersion) { _ = try store(keychain).mutate(revision: 0, command: ["type": "unlinkPrescription", "prescriptionId": prescriptionID]) }
+      try check(before == keychain.entries && keychain.writes.isEmpty, "Unsupported version fell back or wrote")
+    }
+    for bytes in [Data("broken".utf8), Data("{}".utf8), Data("{\"schemaVersion\":true,\"records\":[]}".utf8)] {
+      let keychain = FakeKeychain(); keychain.legacy(name: "Stale", stock: nil)
+      keychain.entries[MedicationCollectionStorage.service] = bytes
+      let before = keychain.entries
+      try rejects(.invalidRecord) { _ = try store(keychain).read() }
+      try rejects(.invalidRecord) { _ = try store(keychain).mutate(revision: 0, command: ["type": "remove", "id": firstID]) }
+      try check(before == keychain.entries && keychain.writes.isEmpty, "Malformed data fell back or wrote")
+    }
+  }
+
+  static func validationAgreement() throws {
+    let whitespace = "\u{0009}\u{000a}\u{000b}\u{000c}\u{000d} \u{0085}\u{00a0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200a}\u{200b}\u{2028}\u{2029}\u{202f}\u{205f}\u{3000}"
+    let base = MedicationRecord(id: firstID, displayName: "Synthetic", prescriptionId: nil).payload
+    func readRecord(_ changes: [String: Any], valid: Bool) throws {
+      let keychain = FakeKeychain()
+      let bytes = try JSONSerialization.data(withJSONObject: ["schemaVersion": 2, "revision": 0,
+        "records": [base.merging(changes) { _, new in new }], "pendingLegacy": NSNull()])
+      keychain.entries[MedicationCollectionStorage.service] = bytes
+      if valid { _ = try store(keychain).read() }
+      else { try rejects(.invalidRecord) { _ = try store(keychain).read() } }
+      try check(keychain.entries[MedicationCollectionStorage.service] == bytes && keychain.writes.isEmpty, "Validation rewrote stored bytes")
+    }
+    for (name, valid) in [(whitespace, false), ("\u{0085}", false), ("\u{200b}", false), ("\u{feff}", true), ("\u{feff}Synthetic", true), (whitespace + "Synthetic" + whitespace, true)] {
+      try readRecord(["displayName": name], valid: valid)
+      try readRecord(["healthKitLink": ["conceptReference": name]], valid: valid)
+    }
+    for (date, valid) in [
+      ("0000-01-01T00:00:00.000Z", true), ("0000-02-29T00:00:00.000Z", true),
+      ("1500-02-29T00:00:00.000Z", false), ("1582-10-10T00:00:00.000Z", true),
+      ("2000-02-29T23:59:59.999Z", true), ("1900-02-29T00:00:00.000Z", false),
+      ("9999-12-31T23:59:59.999Z", true), ("10000-01-01T00:00:00.000Z", false),
+      ("2026-01-01T24:00:00.000Z", false), ("2026-01-01T00:00:60.000Z", false),
+      ("2026-01-01T00:00:00.000Z\n", false)
+    ] {
+      let baseline: [String: Any] = ["id": prescriptionID, "quantity": 1, "recordedAt": date, "healthKitConceptReference": NSNull()]
+      try readRecord(["stockBaseline": baseline], valid: valid)
+    }
+    for value in [0, -0.0, 0.5, Double.leastNonzeroMagnitude, Double(MedicationCollectionStorage.maximumInteger)] {
+      try readRecord(["legacyRecordedStock": value, "lowStockThreshold": value], valid: true)
+    }
+    for value in [true, -1, Double(MedicationCollectionStorage.maximumInteger) + 1, "1"] as [Any] {
+      try readRecord(["legacyRecordedStock": value], valid: false)
+      try rejects(.invalidRecord) { _ = try MedicationCollectionStorage.count(value) }
+    }
+    for value in [Double.nan, Double.infinity, -Double.infinity] {
+      try rejects(.invalidRecord) { _ = try MedicationCollectionStorage.quantity(value) }
+    }
+    try rejects(.invalidRecord) { _ = try MedicationCollectionStorage.count(0.5) }
+    // Newly accepted names are normalized identically at both command boundaries.
+    let keychain = FakeKeychain(); let storage = store(keychain)
+    let empty = try storage.read()
+    let created = try storage.mutate(revision: empty.revision, command: ["type": "create", "displayName": whitespace + "Synthetic" + whitespace, "prescriptionId": NSNull()])
+    try check(created.records[0].displayName == "Synthetic", "Name trimming differs from JS")
+  }
+
+  static func mutationPreservation() throws {
+    let keychain = FakeKeychain(); keychain.entries[MedicationCollectionStorage.service] = try fixtureData()
+    let storage = MedicationCollectionStorage(keychain: keychain, now: { Date(timeIntervalSince1970: 1767225600) })
+    var state = try storage.read()
+    let original = state.records
+    state = try storage.mutate(revision: state.revision, command: ["type": "create", "displayName": "New synthetic", "prescriptionId": NSNull()])
+    try check(Array(state.records.prefix(original.count)) == original, "Create changed existing full records")
+    state = try storage.mutate(revision: state.revision, command: ["type": "remove", "id": state.records.last!.id])
+    try check(state.records == original, "Remove changed surviving full records")
+    // Unrelated edits must retain leading BOM scalars in opaque sources/names.
+    state.records[1].displayName = "\u{feff}Synthetic"
+    state.records[1].healthKitConceptReference = "\u{feff}opaque-reference"
+    let priorBaseline = state.records[1].stockBaseline!
+    state.records[1].stockBaseline = StockBaseline(id: priorBaseline.id, quantity: priorBaseline.quantity,
+      recordedAt: priorBaseline.recordedAt, healthKitConceptReference: "\u{feff}baseline-source")
+    keychain.entries[MedicationCollectionStorage.service] = try JSONSerialization.data(withJSONObject: state.payload)
+    let preserved = try storage.read()
+    try check(preserved == state, "JSON decoding normalized recognized strings")
+    let before = state
+    state = try storage.mutate(revision: state.revision, command: ["type": "establishBaseline", "id": state.records[0].id, "quantity": 0.25])
+    var corrected = before.records[0]
+    corrected.stockBaseline = state.records[0].stockBaseline
+    corrected.stockAdditions = []; corrected.legacyRecordedStock = nil
+    try check(state.records == [corrected] + Array(before.records.dropFirst()), "Correction changed unrelated fields")
+    try check(corrected.stockBaseline?.quantity == 0.25 && corrected.stockBaseline?.id != before.records[0].stockBaseline?.id, "Correction did not replace the baseline")
+    let beforeAdd = state
+    state = try storage.mutate(revision: state.revision, command: ["type": "addStock", "id": state.records[3].id, "quantity": 0.5])
+    var expected = beforeAdd.records; expected[3].legacyRecordedStock = 0.5
+    try check(state.records == expected, "Legacy addition changed unrelated fields")
+    let beforeUnlink = state
+    state = try storage.mutate(revision: state.revision, command: ["type": "unlinkPrescription", "prescriptionId": prescriptionID])
+    expected = beforeUnlink.records.map { var record = $0; record.prescriptionId = nil; return record }
+    try check(state.records == expected, "Bulk unlink changed full records")
+  }
+
 }

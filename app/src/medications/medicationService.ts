@@ -1,7 +1,9 @@
+import { canChangeStock, recordedQuantity } from './medicationStock';
 import {
   MedicationError,
   isIdentifier,
   isStock,
+  parseStockInput,
   validateDetails,
   type MedicationCollection,
   type MedicationDetails,
@@ -11,7 +13,8 @@ export type MedicationCommand =
   | ({ type: 'create' } & MedicationDetails)
   | ({ type: 'edit'; id: string } & MedicationDetails)
   | { type: 'completeLegacy'; displayName: string }
-  | { type: 'setStock'; id: string; stock: number }
+  | { type: 'establishBaseline'; id: string; quantity: number }
+  | { type: 'addStock'; id: string; quantity: number }
   | { type: 'unlinkPrescription'; prescriptionId: string }
   | { type: 'remove'; id: string };
 
@@ -91,21 +94,28 @@ export function createMedicationService(
       input: string,
     ) {
       const record = find(state, id);
-      const trimmed = input.trim();
-      const amount = Number(trimmed);
+      if (!canChangeStock(record)) {
+        throw new MedicationError('unsupported-stock-source');
+      }
+      const amount = parseStockInput(input);
+      const current = recordedQuantity(record);
       if (
-        !/^\d+$/.test(trimmed) ||
-        !isStock(amount) ||
-        (action === 'add' && (amount === 0 || record.stock === null)) ||
-        (action === 'record' && record.stock !== null)
+        (action === 'add' && (amount === 0 || current === null)) ||
+        (action === 'record' && current !== null)
       ) {
         throw new MedicationError('invalid-input');
       }
-      const stock = action === 'add' ? record.stock! + amount : amount;
-      if (!isStock(stock)) {
+      if (
+        action === 'add' &&
+        (!isStock(current! + amount) || current! + amount <= current!)
+      ) {
         throw new MedicationError('invalid-input');
       }
-      return store.mutate(state.revision, { type: 'setStock', id, stock });
+      return store.mutate(state.revision, {
+        type: action === 'add' ? 'addStock' : 'establishBaseline',
+        id,
+        quantity: amount,
+      });
     },
     // The caller must obtain explicit deletion confirmation for this snapshot.
     remove(state: MedicationCollection, id: string) {

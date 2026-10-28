@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "revision": 42,
+  "records": [
+    {
+      "id": "00000001-1111-4111-8111-111111111111",
+      "displayName": "Synthetic compatibility 1",
+      "prescriptionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "stockUnit": "count",
+      "stockBaseline": {
+        "id": "00000001-2222-4222-8222-222222222222",
+        "quantity": 4.5,
+        "recordedAt": "2026-01-01T00:00:00.000Z",
+        "healthKitConceptReference": null
+      },
+      "stockAdditions": [
+        {
+          "id": "00000001-3333-4333-8333-333333333333",
+          "baselineId": "00000001-2222-4222-8222-222222222222",
+          "quantity": 0.5,
+          "recordedAt": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "legacyRecordedStock": null,
+      "lowStockThreshold": 0,
+      "healthKitLink": null
+    },
+    {
+      "id": "00000002-1111-4111-8111-111111111111",
+      "displayName": "Synthetic compatibility 2",
+      "prescriptionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "stockUnit": "count",
+      "stockBaseline": {
+        "id": "00000002-2222-4222-8222-222222222222",
+        "quantity": 4.5,
+        "recordedAt": "2026-01-01T00:00:00.000Z",
+        "healthKitConceptReference": "synthetic:opaque:original-source"
+      },
+      "stockAdditions": [
+        {
+          "id": "00000002-3333-4333-8333-333333333333",
+          "baselineId": "00000002-2222-4222-8222-222222222222",
+          "quantity": 0.5,
+          "recordedAt": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "legacyRecordedStock": null,
+      "lowStockThreshold": 1.25,
+      "healthKitLink": {
+        "conceptReference": "synthetic:opaque:different-source"
+      }
+    },
+    {
+      "id": "00000003-1111-4111-8111-111111111111",
+      "displayName": "Synthetic compatibility 3",
+      "prescriptionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "stockUnit": "count",
+      "stockBaseline": {
+        "id": "00000003-2222-4222-8222-222222222222",
+        "quantity": 4.5,
+        "recordedAt": "2026-01-01T00:00:00.000Z",
+        "healthKitConceptReference": "synthetic:opaque:original-source"
+      },
+      "stockAdditions": [
+        {
+          "id": "00000003-3333-4333-8333-333333333333",
+          "baselineId": "00000003-2222-4222-8222-222222222222",
+          "quantity": 0.5,
+          "recordedAt": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "legacyRecordedStock": null,
+      "lowStockThreshold": 1.25,
+      "healthKitLink": null
+    },
+    {
+      "id": "00000004-1111-4111-8111-111111111111",
+      "displayName": "Synthetic compatibility 4",
+      "prescriptionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "stockUnit": "count",
+      "stockBaseline": null,
+      "stockAdditions": [],
+      "legacyRecordedStock": 0,
+      "lowStockThreshold": null,
+      "healthKitLink": null
+    },
+    {
+      "id": "00000005-1111-4111-8111-111111111111",
+      "displayName": "Synthetic compatibility 5",
+      "prescriptionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "stockUnit": "count",
+      "stockBaseline": null,
+      "stockAdditions": [],
+      "legacyRecordedStock": null,
+      "lowStockThreshold": null,
+      "healthKitLink": null
+    },
+    {
+      "id": "00000006-1111-4111-8111-111111111111",
+      "displayName": "Synthetic compatibility 6",
+      "prescriptionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "stockUnit": "count",
+      "stockBaseline": null,
+      "stockAdditions": [],
+      "legacyRecordedStock": 9007199254740991,
+      "lowStockThreshold": null,
+      "healthKitLink": null
+    }
+  ],
+  "pendingLegacy": null
+}

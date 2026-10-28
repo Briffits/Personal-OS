@@ -1,3 +1,4 @@
+import { recordedQuantity } from '../medications/medicationStock';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
@@ -37,7 +38,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
   const { width } = useWindowDimensions();
   const [state, setState] = useState<MedicationCollection | null>(null);
   const [busy, setBusy] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState('');
   const [notice, setNotice] = useState('');
   const [editor, setEditor] = useState<Editor | null>(null);
   const stateRef = useRef(state);
@@ -59,12 +60,22 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
       const next = await service.read();
       if (mounted.current) {
         update(next);
-        setFailed(false);
+        setFailed('');
       }
-    } catch {
+    } catch (error) {
       if (mounted.current) {
         update(null);
-        setFailed(true);
+        const code =
+          typeof error === 'object' && error !== null && 'code' in error
+            ? error.code
+            : '';
+        setFailed(
+          code === 'unsupported-version'
+            ? 'Your saved medications use a version this app cannot open. Use a compatible app version. Your saved data has not been replaced.'
+            : code === 'invalid-record'
+            ? 'Your saved medication data could not be validated. Changes are blocked and your saved data has not been replaced.'
+            : 'Your saved medications could not be read. Retry before making changes.',
+        );
       }
     }
   }
@@ -117,7 +128,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
               ? 'Invalid amount'
               : 'Prescription unavailable',
             code === 'invalid-input'
-              ? 'Enter a whole number of zero or more. Add stock requires a number greater than zero within the supported range.'
+              ? 'Enter a count of zero or more, including fractions. Add stock requires a number greater than zero within the supported range.'
               : 'This prescription is no longer available. Choose another prescription or None / Unlinked.',
           );
         } else {
@@ -138,6 +149,9 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
 
   function requestAction(record: MedicationRecord, action: MedicationAction) {
     if (!available()) {
+      return;
+    }
+    if (!medicationActions(record).some(item => item.name === action)) {
       return;
     }
     const snapshot = stateRef.current!;
@@ -193,7 +207,9 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
       return;
     }
     const stockAction =
-      action === 'correct' && record.stock === null ? 'record' : action;
+      action === 'correct' && recordedQuantity(record) === null
+        ? 'record'
+        : action;
     const title =
       stockAction === 'add'
         ? 'Add stock'
@@ -203,8 +219,8 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
     Alert.prompt(
       title,
       stockAction === 'add'
-        ? 'Enter the number of tablets to add.'
-        : 'Enter the number of tablets you physically have. This becomes the recorded total.',
+        ? 'Enter the number of units to add.'
+        : 'Enter the number of units you physically have. This becomes the recorded total.',
       [
         {
           text: 'Cancel',
@@ -236,7 +252,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
       ],
       'plain-text',
       '',
-      'number-pad',
+      'decimal-pad',
     );
   }
 
@@ -251,7 +267,9 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
       {
         title: record.displayName,
         options: [...actions.map(action => action.label), 'Cancel'],
-        destructiveButtonIndex: 3,
+        destructiveButtonIndex: actions.findIndex(
+          action => action.name === 'delete',
+        ),
         cancelButtonIndex: actions.length,
       },
       index => {
@@ -339,8 +357,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
         {failed && (
           <>
             <Text accessibilityRole="alert" style={text}>
-              Your saved medications could not be read. Retry before making
-              changes.
+              {failed}
             </Text>
             {button('Retry loading medications', async () => {
               if (busyRef.current) {
@@ -365,7 +382,7 @@ export default function MedicationScreen({ onBack }: { onBack: () => void }) {
           <AppCard variant="attention" style={styles.card}>
             <Text style={text}>Saved medication — name needed</Text>
             <Text style={text}>
-              Recorded stock: {state.pendingLegacy.stock} tablets
+              Recorded stock: {state.pendingLegacy.stock} units
             </Text>
             <Text style={text}>
               Enter a name to finish keeping this medication. Your saved stock

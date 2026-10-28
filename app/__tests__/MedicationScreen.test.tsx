@@ -1,3 +1,7 @@
+import frozen from '../test-utils/fixtures/medication-v2.json';
+import { validateCollection } from '../src/medications/medication';
+import { recordedQuantity } from '../src/medications/medicationStock';
+import { stockFields } from '../test-utils/medicationFixture';
 import AppCard from '../src/design-system/components/AppCard';
 import React from 'react';
 import { ActionSheetIOS, Alert } from 'react-native';
@@ -119,7 +123,7 @@ test('visible Add, multiple compact cards, no prescription calls, and normal tap
   expect(card().props.onPress).toBeUndefined();
   expect(card(secondId).props.onPress).toBeUndefined();
   expect(card().props.accessibilityLabel).toBe(
-    'Example one, Recorded stock: 12 tablets',
+    'Example one, Recorded stock: 12 units',
   );
   expect(card(secondId).props.accessibilityLabel).toBe(
     'Example two, Stock not recorded',
@@ -196,7 +200,7 @@ test('adding medication selects exactly one prescription or None; legacy medicat
   await press('Save medication');
   expect(fixture.state().records[2]).toMatchObject({
     displayName: 'Example three',
-    stock: null,
+    ...stockFields(null),
     prescriptionId: otherPrescriptionId,
   });
   expect(fixture.state().records[1].prescriptionId).toBeNull();
@@ -217,7 +221,7 @@ test('edit rename/link/unlink keeps ID, stock and other records', async () => {
   expect(fixture.state().records[0]).toEqual({
     id: firstId,
     displayName: 'Renamed example',
-    stock: 12,
+    ...stockFields(12),
     prescriptionId,
   });
   await action('add');
@@ -228,7 +232,7 @@ test('edit rename/link/unlink keeps ID, stock and other records', async () => {
   expect(fixture.state().records[0]).toEqual({
     id: firstId,
     displayName: 'Renamed example',
-    stock: 15,
+    ...stockFields(15),
     prescriptionId: null,
   });
   expect(fixture.state().records[1]).toEqual(initialCollection().records[1]);
@@ -240,14 +244,16 @@ test('correcting unrecorded stock records zero without assuming a previous balan
   expect(prompt.mock.calls[0][0]).toBe('Record current stock');
   await act(async () => promptButtons()[1].onPress('0'));
   expect(card(secondId).props.accessibilityLabel).toContain(
-    'Recorded stock: 0 tablets',
+    'Recorded stock: 0 units',
   );
   await action('add', secondId);
   await act(async () => promptButtons()[1].onPress('2'));
-  expect(fixture.state().records.map(record => record.stock)).toEqual([12, 2]);
+  expect(
+    fixture.state().records.map(record => recordedQuantity(record)),
+  ).toEqual([12, 2]);
 });
 
-test.each(['', '-1', '1.5', '0', '9007199254740992'])(
+test.each(['', '-1', '1.2.3', '0', '9007199254740992'])(
   'invalid addition %p never writes',
   async value => {
     await render();
@@ -305,7 +311,7 @@ test('empty collection has Add but no fabricated medication', async () => {
 
 test('pending legacy preserves stock, requires a name, and completes unlinked with the same ID', async () => {
   fixture = medicationFixture({
-    schemaVersion: 1,
+    schemaVersion: 2,
     revision: 0,
     records: [],
     pendingLegacy: { id: firstId, stock: 0, prescriptionId: null },
@@ -329,7 +335,7 @@ test('pending legacy preserves stock, requires a name, and completes unlinked wi
     {
       id: firstId,
       displayName: 'Saved example',
-      stock: 0,
+      ...stockFields(0),
       prescriptionId: null,
     },
   ]);
@@ -407,7 +413,7 @@ test('duplicate prompt submission and overlapping actions are blocked during wri
     await write;
   });
   expect(NativeMedicationStorage.mutate).toHaveBeenCalledTimes(1);
-  expect(fixture.state().records[0].stock).toBe(15);
+  expect(recordedQuantity(fixture.state().records[0])).toBe(15);
 });
 
 test('lost write response reloads committed stock and does not retry the addition', async () => {
@@ -420,7 +426,7 @@ test('lost write response reloads committed stock and does not retry the additio
   await render();
   await action('add');
   await act(async () => promptButtons()[1].onPress('3'));
-  expect(card().props.accessibilityLabel).toContain('15 tablets');
+  expect(card().props.accessibilityLabel).toContain('15 units');
   expect(rendered()).toContain('Check the reloaded medication list');
   expect(NativeMedicationStorage.mutate).toHaveBeenCalledTimes(1);
 });
@@ -435,7 +441,7 @@ test('failed write with failed reload blocks mutations until retry', async () =>
   await act(async () => promptButtons()[1].onPress('3'));
   expect(button('Add medication').props.disabled).toBe(true);
   await press('Retry loading medications');
-  expect(card().props.accessibilityLabel).toContain('12 tablets');
+  expect(card().props.accessibilityLabel).toContain('12 units');
 });
 
 test('cancelled form and unmounted prompt callbacks cannot write', async () => {
@@ -457,7 +463,7 @@ test.each(['0', '7'])(
     await render();
     await action('record', secondId);
     await act(async () => promptButtons()[1].onPress(value));
-    expect(fixture.state().records[1].stock).toBe(Number(value));
+    expect(recordedQuantity(fixture.state().records[1])).toBe(Number(value));
     expect(card(secondId).props.accessibilityActions).toContainEqual({
       name: 'add',
       label: 'Add stock',
@@ -475,10 +481,10 @@ test('zero stock supports successive additions and correction replaces rather th
     await action('add');
     await act(async () => promptButtons()[1].onPress(value));
   }
-  expect(fixture.state().records[0].stock).toBe(5);
+  expect(recordedQuantity(fixture.state().records[0])).toBe(5);
   await action('correct');
   await act(async () => promptButtons()[1].onPress(' 7 '));
-  expect(fixture.state().records[0].stock).toBe(7);
+  expect(recordedQuantity(fixture.state().records[0])).toBe(7);
 });
 
 test.each([
@@ -486,7 +492,7 @@ test.each([
   '   ',
   undefined,
   '-1',
-  '1.5',
+  '1.2.3',
   'abc',
   'Infinity',
   '9007199254740992',
@@ -504,10 +510,9 @@ test.each([
       await act(async () => promptButtons()[1].onPress(value));
     }
     expect(fixture.mutate).not.toHaveBeenCalled();
-    expect(fixture.state().records.map(record => record.stock)).toEqual([
-      12,
-      null,
-    ]);
+    expect(
+      fixture.state().records.map(record => recordedQuantity(record)),
+    ).toEqual([12, null]);
     expect(alert).toHaveBeenCalledWith('Invalid amount', expect.any(String));
   },
 );
@@ -518,7 +523,10 @@ test.each([null, 0, 12])(
     const initial = initialCollection();
     fixture = medicationFixture({
       ...initial,
-      records: [{ ...initial.records[0], stock }, initial.records[1]],
+      records: [
+        { ...initial.records[0], ...stockFields(stock) },
+        initial.records[1],
+      ],
     });
     await render();
     await action('edit');
@@ -529,14 +537,17 @@ test.each([null, 0, 12])(
     await press('Save medication');
     expect(fixture.state().records[0]).toEqual({
       ...initial.records[0],
-      stock,
+      ...stockFields(stock),
       displayName: 'Renamed example',
     });
     await action(stock === null ? 'record' : 'add');
     await act(async () => promptButtons()[1].onPress('3'));
+    expect(recordedQuantity(fixture.state().records[0])).toBe(
+      stock === null ? 3 : stock + 3,
+    );
     expect(fixture.state().records[0]).toMatchObject({
       displayName: 'Renamed example',
-      stock: stock === null ? 3 : stock + 3,
+      stockUnit: 'count',
     });
   },
 );
@@ -596,7 +607,7 @@ test('initial loading and duplicate retries block every mutation until the one r
     resolve(initialCollection());
     await pending;
   });
-  expect(card().props.accessibilityLabel).toContain('12 tablets');
+  expect(card().props.accessibilityLabel).toContain('12 units');
 });
 
 test('repeated read failures stay blocked until a successful unrecorded collection read', async () => {
@@ -632,13 +643,11 @@ test.each(['record', 'correct', 'edit'])(
     await submit();
     expect(fixture.state().records).toEqual(initialCollection().records);
     await submit();
-    expect(
-      fixture.state().records.find(record => record.id === id),
-    ).toMatchObject(
-      operation === 'edit'
-        ? { displayName: 'Renamed', stock: 12 }
-        : { stock: 7 },
-    );
+    const saved = fixture.state().records.find(record => record.id === id)!;
+    expect(recordedQuantity(saved)).toBe(operation === 'edit' ? 12 : 7);
+    if (operation === 'edit') {
+      expect(saved.displayName).toBe('Renamed');
+    }
   },
 );
 
@@ -653,7 +662,7 @@ test('cancelled stock prompt cannot submit later and a new prompt remains usable
   expect(fixture.mutate).not.toHaveBeenCalled();
   await action('add');
   await act(async () => promptButtons()[1].onPress('2'));
-  expect(fixture.state().records[0].stock).toBe(14);
+  expect(recordedQuantity(fixture.state().records[0])).toBe(14);
 });
 
 test('rename save blocks duplicate submission, cancellation and Back; stale form cannot save after success', async () => {
@@ -690,7 +699,7 @@ test('rename save blocks duplicate submission, cancellation and Back; stale form
   await act(async () => promptButtons()[1].onPress('3'));
   expect(fixture.state().records[0]).toMatchObject({
     displayName: 'Renamed',
-    stock: 15,
+    ...stockFields(15),
   });
 });
 
@@ -709,3 +718,55 @@ test('ordinary medication cards remain informational regardless of recorded stoc
   expect(cards).toHaveLength(2);
   expect(cards.every(node => node.props.variant !== 'attention')).toBe(true);
 });
+
+test('fractional correction/addition are accessible and persist', async () => {
+  await render();
+  await action('correct');
+  await act(async () => promptButtons()[1].onPress('1,5'));
+  expect(fixture.state().records[0].legacyRecordedStock).toBeNull();
+  expect(fixture.state().records[0].stockBaseline?.quantity).toBe(1.5);
+  await action('add');
+  await act(async () => promptButtons()[1].onPress('0.5'));
+  expect(card().props.accessibilityLabel).toContain('2 units');
+});
+
+test('frozen v2 cards show honest stock and restrict linked/source-mismatched actions', async () => {
+  fixture = medicationFixture(validateCollection(frozen));
+  await render();
+  expect(card(frozen.records[0].id).props.accessibilityLabel).toContain(
+    '5 units',
+  );
+  for (const index of [1, 2]) {
+    const node = card(frozen.records[index].id);
+    expect(node.props.accessibilityLabel).not.toContain('5 units');
+    expect(node.props.accessibilityLabel).toContain(
+      index === 1 ? 'Current stock unavailable' : 'Stock needs confirmation',
+    );
+    expect(
+      node.props.accessibilityActions.map(
+        (item: { name: string }) => item.name,
+      ),
+    ).toEqual(['edit', 'delete']);
+    await act(async () => node.props.onLongPress());
+    expect(sheet.mock.calls[index - 1][0].destructiveButtonIndex).toBe(1);
+    await act(async () => sheet.mock.calls[index - 1][1](2));
+  }
+  await action('edit', frozen.records[1].id);
+  await press('Save medication');
+  expect(fixture.state().records).toEqual(validateCollection(frozen).records);
+  expect(prompt).not.toHaveBeenCalled();
+});
+
+test.each([
+  ['unsupported-version', 'Use a compatible app version'],
+  ['invalid-record', 'could not be validated'],
+])(
+  'storage failure %s blocks edits with a specific explanation',
+  async (code, message) => {
+    jest.mocked(NativeMedicationStorage.read).mockRejectedValue({ code });
+    await render();
+    expect(rendered()).toContain(message);
+    expect(button('Add medication').props.disabled).toBe(true);
+    expect(fixture.mutate).not.toHaveBeenCalled();
+  },
+);
