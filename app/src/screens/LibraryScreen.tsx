@@ -16,11 +16,13 @@ import {
 } from '../design-system';
 
 type LibraryScreenProps = {
+  onOpenHealthMedications: () => void;
   onOpenMedication: () => void;
   onOpenPrescriptionWallet: () => void;
 };
 
 function LibraryScreen({
+  onOpenHealthMedications,
   onOpenMedication,
   onOpenPrescriptionWallet,
 }: LibraryScreenProps) {
@@ -58,6 +60,33 @@ function LibraryScreen({
         >
           Library
         </Text>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Apple Health medications"
+          onPress={onOpenHealthMedications}
+          style={styles.entry}
+        >
+          <AppCard>
+            <Text
+              style={[
+                typography.cardTitle,
+                styles.cardTitle,
+                { color: theme.colours.textPrimary },
+              ]}
+            >
+              Apple Health medications
+            </Text>
+            <Text
+              style={[
+                typography.body,
+                { color: theme.colours.textSecondaryOnSurface },
+              ]}
+            >
+              View shared medications and manage Health access.
+            </Text>
+          </AppCard>
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"

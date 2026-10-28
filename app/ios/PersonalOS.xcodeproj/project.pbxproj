@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AAEF00000000000000000002 /* HealthMedicationsBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AAEF00000000000000000012 /* HealthMedicationsBridge.m */; };
+		AAEF00000000000000000001 /* HealthMedicationsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAEF00000000000000000011 /* HealthMedicationsModule.swift */; };
 		AADE00000000000000000004 /* RemindersBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000014 /* RemindersBridge.m */; };
 		AADE00000000000000000003 /* RemindersModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000013 /* RemindersModule.swift */; };
 		AADE00000000000000000002 /* EventKitRemindersStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000012 /* EventKitRemindersStore.swift */; };
@@ -28,6 +30,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AAEF00000000000000000012 /* HealthMedicationsBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HealthMedicationsBridge.m; sourceTree = "<group>"; };
+		AAEF00000000000000000011 /* HealthMedicationsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMedicationsModule.swift; sourceTree = "<group>"; };
 		AADE00000000000000000014 /* RemindersBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RemindersBridge.m; sourceTree = "<group>"; };
 		AADE00000000000000000013 /* RemindersModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersModule.swift; sourceTree = "<group>"; };
 		AADE00000000000000000012 /* EventKitRemindersStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitRemindersStore.swift; sourceTree = "<group>"; };
@@ -97,6 +101,8 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				AAEF00000000000000000011 /* HealthMedicationsModule.swift */,
+				AAEF00000000000000000012 /* HealthMedicationsBridge.m */,
 				AADE00000000000000000011 /* RemindersReader.swift */,
 				AADE00000000000000000012 /* EventKitRemindersStore.swift */,
 				AADE00000000000000000013 /* RemindersModule.swift */,
@@ -294,6 +300,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AAEF00000000000000000001 /* HealthMedicationsModule.swift in Sources */,
+				AAEF00000000000000000002 /* HealthMedicationsBridge.m in Sources */,
 				AADE00000000000000000001 /* RemindersReader.swift in Sources */,
 				AADE00000000000000000002 /* EventKitRemindersStore.swift in Sources */,
 				AADE00000000000000000003 /* RemindersModule.swift in Sources */,
@@ -323,6 +331,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = PersonalOS/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = PersonalOS/PersonalOS.entitlements;
 				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -352,6 +361,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = PersonalOS/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = PersonalOS/PersonalOS.entitlements;
 				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
