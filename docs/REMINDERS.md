@@ -1,7 +1,8 @@
 # Reminders due today — VPS slice and Mac handover
 
 Status: TypeScript/UI and native EventKit bridge implemented; unsigned iOS build
-and synthetic native tests passed. Physical-iPhone validation is outstanding. Based on
+and synthetic native tests passed. Focused physical-iPhone validation passed as
+reported below; remaining device boundaries are explicit. Based on
 `826d5f4ec22183d7a8869e983fbc3e02b5c0c2f3` (merged shell navigation).
 
 ## Implemented boundary
@@ -189,8 +190,9 @@ These tests **do not establish correct EventKit membership, permission UI,
 native module registration, DST calculation, time-zone conversion, iCloud sync,
 native offline behavior or actual iOS accessibility/layout**.
 
-The Mac phase must build the bridge with existing tooling and validate on a
-physical iPhone: first request/allow/deny, restriction where reproducible,
+The original Mac handover checklist called for building the bridge and checking
+the following on a physical iPhone (see dated results below for completed coverage):
+first request/allow/deny, restriction where reproducible,
 Settings revocation/restoration, date-only/timed/undated/completed reminders,
 earlier today, both midnight boundaries, DST short/long days, time-zone changes,
 foreground changes made in Apple Reminders, offline local records, failed reads,
@@ -309,10 +311,119 @@ or the permission dialog. Deployment targets, signing settings and dependency
 manifests/lockfiles are unchanged. No install, launch, device permission request,
 merge or deployment was performed; Metro and other worktrees were not changed.
 
-The physical-iPhone checklist above remains outstanding, including authorization
-and Settings transitions, real EventKit date semantics and time-zone/DST changes,
+At the end of the 2026-10-27 build phase, the physical-iPhone checklist remained
+outstanding, including authorization and Settings transitions, real EventKit date semantics and time-zone/DST changes,
 iCloud/offline behavior, foreground refresh, failed/slow reads and large lists,
 VoiceOver, largest Dynamic Type, small-screen layout and light/dark appearance.
 Use only synthetic reminders for those checks.
 
 Suggested commit: `Add read-only native Reminders bridge and tests`
+
+
+## Physical-iPhone validation and focus review — 2026-10-28
+
+Tested identity: **PersonalOS Reminders Test**, already installed and reported by
+its operator as built from `a2526f4c060b4192cdbff24fd7de76e6486fb4ed`.
+The resumed session did not independently verify the installed binary's provenance.
+Results below are operator-confirmed observations, not automated device assertions.
+No reminder contents, list names, record identifiers or screenshots are retained
+in this report. Fixtures were created manually in a separate synthetic list;
+existing personal reminders were preserved.
+
+### Confirmed device results
+
+- Startup/no-prompt and denial/Settings-return checks were already reported as
+  passed in the handoff. Access was left denied; those checks were not repeated.
+- Enabling access for the test identity in Settings and returning displayed the
+  authorised empty state. This establishes the observed UI outcome, not an
+  independent audit of all accessible personal reminders.
+- Initial fixture membership included an incomplete date-only reminder due today
+  followed by an incomplete timed reminder due earlier today. The configured
+  synthetic time displayed correctly. Yesterday, tomorrow, undated and
+  completed-today fixtures were absent from the reported fixture set.
+- Changing the tomorrow fixture to today in Apple Reminders made it appear on
+  foreground return without tapping Refresh.
+- With Airplane Mode on and Wi-Fi off, manual Refresh retained the expected
+  synthetic fixtures. This validates reading these locally available records
+  offline; it does not validate cloud synchronization or a cold launch offline.
+- Revoking access in Settings and returning without manual Refresh cleared all
+  rows and displayed the denied explanation with the Settings button. Restoring
+  access and returning made fixtures visible again.
+- VoiceOver reading order and the spoken timed due value were clear. VoiceOver
+  activated Refresh successfully, navigation remained usable afterward, and Back
+  returned to Today where the Reminders entry was reachable.
+- At the largest accessibility text size, checked content and Refresh were
+  readable and reachable, with no reported clipping or overlap. Light and dark
+  appearances were each reported clear at that size. Preferred display settings
+  were restored afterward.
+
+### VoiceOver entry focus: non-blocking observation
+
+On opening Reminders from Today, VoiceOver initially focused **Refresh reminders**.
+The screen source orders Back, the heading (with header role), introduction,
+read-only reminder rows and Refresh within one scroll view. Each reminder groups
+its title and due label into one accessible element. Navigation replaces the
+Today screen in React state; no explicit accessibility-focus request is made.
+Source order alone does not prove native initial-focus behaviour.
+
+One focused follow-up checked orientation from that initial focus without touch
+exploration: swipe left to Back, then right through the heading and content. The
+operator confirmed the destination was clear and all elements were reachable
+predictably, without a reported trap or disruptive jump. Initial heading focus
+is not a requirement by itself. No practical defect was established in the tested
+flow, so Refresh-first focus is recorded as **non-blocking** and no focus change
+is proposed. This conclusion does not promise the same initial focus on every
+iOS version, device or asynchronous loading outcome.
+
+### Explicit untested device boundaries
+
+- Exact start/end midnight membership, midnight rollover while open, DST short
+  and long days, time-zone changes, explicit-zone versus floating EventKit dates,
+  non-Gregorian dates, invalid components, recurrence, multiple-list coverage and
+  equal-time tie ordering. Synthetic native tests cover several calendar rules;
+  they do not establish their actual EventKit delivery on a device.
+- System-restricted access, first-dialog Allow (the grant here was through
+  Settings), induced permission/read failures, slow reads, timeout/cancellation,
+  and revocation while a query is in flight. Mock/native coordinator tests are
+  distinct from device evidence.
+- iCloud sync, cold launch offline, large-list performance and memory use. The
+  implementation fetches all incomplete reminders, filters on the main queue,
+  and renders the resulting rows in a ScrollView; large datasets were not tested.
+- Small-screen hardware, other iOS versions, measured colour contrast, all UI
+  states at maximum text size, and an exhaustive accessibility audit.
+- No new production/v2 or Health regression coverage is claimed. No sensitive
+  device logs were collected to supplement the observations.
+
+### PR review and applicable validation
+
+Reviewed all 19 changed files from base
+`826d5f4ec22183d7a8869e983fbc3e02b5c0c2f3` to head
+`a2526f4c060b4192cdbff24fd7de76e6486fb4ed`: navigation/UI, typed contract,
+validation adapter, foreground/stale-result handling, native permissions and
+calendar filtering, bridge registration, project/plist wiring, fixtures, tests
+and this documentation. No blocking code defect was identified. No new dependency,
+reminder write path, content logging, persistence or unrelated domain change was
+found. The untested boundaries above remain limitations, not passed checks.
+
+Applicable prior validation is recorded in the dated sections above: 15 native
+synthetic tests; the Mac TypeScript and lint checks; 3 focused Jest suites / 69
+tests; and the successful unsigned iOS build. The earlier VPS full-suite result
+is historical coverage, not a fresh full-suite run at this head. The focused
+device observations add runtime evidence without replacing those test boundaries.
+Unchanged code was not rebuilt or retested during this documentation review.
+
+GitHub PR #4 still has an outdated VPS-only title/body describing the bridge as
+absent. Its description should reflect the native implementation and these device
+results before merge. This local documentation change must also be committed
+and published to become part of the PR; no commit, push, PR edit or merge was
+performed by this review. Merge readiness is a code-review judgement for this
+read-only MVP slice, not a claim that the entire device checklist has passed.
+At review time GitHub reported the PR as draft, with mergeability unknown, zero
+check runs and no commit statuses (the combined status was pending). These are
+not successful CI results. Ready-for-review status and GitHub mergeability/check
+requirements must be resolved before merge; the review did not change PR state.
+
+Connectivity and preferred display settings were restored after the main test
+session. Last confirmed test-identity Reminders access remains enabled; synthetic
+fixtures remain. This review did not change permissions, remove fixtures, rebuild,
+or alter production/v2, Metro or Health diagnostics.
