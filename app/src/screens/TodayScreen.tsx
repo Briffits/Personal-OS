@@ -19,9 +19,14 @@ import {
 type TodayScreenProps = {
   onOpenSettings: () => void;
   onOpenReminders: () => void;
+  onOpenCalendar: () => void;
 };
 
-function TodayScreen({ onOpenSettings, onOpenReminders }: TodayScreenProps) {
+function TodayScreen({
+  onOpenSettings,
+  onOpenReminders,
+  onOpenCalendar,
+}: TodayScreenProps) {
   const theme = usePersonalOSTheme();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -183,6 +188,21 @@ function TodayScreen({ onOpenSettings, onOpenReminders }: TodayScreenProps) {
             ]}
           >
             Reminders due today
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open calendar today"
+          onPress={onOpenCalendar}
+          style={styles.settingsButton}
+        >
+          <Text
+            style={[
+              typography.bodyStrong,
+              { color: theme.colours.textPrimary },
+            ]}
+          >
+            Calendar today
           </Text>
         </Pressable>
       </ScrollView>

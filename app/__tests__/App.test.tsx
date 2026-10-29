@@ -10,6 +10,7 @@ import { NativeMedicationStorage } from '../src/native/NativeMedicationStorage';
 import { NativePrescriptionDocuments } from '../src/native/NativePrescriptionDocuments';
 import { NativeHealthMedications } from '../src/native/NativeHealthMedications';
 import { NativeReminders } from '../src/native/NativeReminders';
+import { NativeCalendar } from '../src/native/NativeCalendar';
 import {
   firstId,
   prescriptionId,
@@ -36,6 +37,13 @@ jest.mock('../src/native/NativeReminders', () => ({
     fetchDueToday: jest.fn(),
   },
 }));
+jest.mock('../src/native/NativeCalendar', () => ({
+  NativeCalendar: {
+    getAuthorizationStatus: jest.fn(),
+    requestAccess: jest.fn(),
+    fetchToday: jest.fn(),
+  },
+}));
 jest.mock('../src/native/NativePrescriptionDocuments', () => ({
   NativePrescriptionDocuments: {
     read: jest.fn(),
@@ -55,6 +63,9 @@ let fixture: ReturnType<typeof medicationFixture>;
 beforeEach(async () => {
   jest.clearAllMocks();
   ReactNative.AppState.currentState = 'active';
+  jest
+    .mocked(NativeCalendar.getAuthorizationStatus)
+    .mockResolvedValue('notDetermined');
   jest
     .mocked(NativeReminders.getAuthorizationStatus)
     .mockResolvedValue('notDetermined');
@@ -105,6 +116,7 @@ function expectNoNativeOperations() {
     NativePrescriptionDocuments,
     NativeReminders,
     NativeHealthMedications,
+    NativeCalendar,
   ]) {
     for (const operation of Object.values(boundary)) {
       expect(operation).not.toHaveBeenCalled();
@@ -148,6 +160,49 @@ test('Reminders is reachable from Today and returns without prompting or touchin
       expect(operation).not.toHaveBeenCalled();
     }
   }
+});
+
+test('Calendar is reachable from Today with repeated returns and no other domain operations', async () => {
+  for (let visit = 0; visit < 2; visit += 1) {
+    await press('Open calendar today');
+    expectHeading('Calendar today');
+    absent('Today tab');
+    expect(NativeCalendar.getAuthorizationStatus).toHaveBeenCalledTimes(
+      visit + 1,
+    );
+    expect(NativeCalendar.requestAccess).not.toHaveBeenCalled();
+    expect(NativeCalendar.fetchToday).not.toHaveBeenCalled();
+    await press('Back to Today');
+    expectHeading('Personal OS');
+    expect(
+      screen.root.findByProps({ accessibilityLabel: 'Today tab' }).props
+        .accessibilityState,
+    ).toEqual({ selected: true });
+    expect(screen.root.findAllByType(AppCard)).toHaveLength(3);
+  }
+  for (const boundary of [
+    NativeReminders,
+    NativeHealthMedications,
+    NativeMedicationStorage,
+    NativePrescriptionDocuments,
+  ]) {
+    for (const operation of Object.values(boundary)) {
+      expect(operation).not.toHaveBeenCalled();
+    }
+  }
+  jest
+    .mocked(NativeCalendar.getAuthorizationStatus)
+    .mockResolvedValue('unavailable');
+  await press('Open calendar today');
+  expect(JSON.stringify(screen.toJSON())).toContain(
+    'Calendar is unavailable in this build.',
+  );
+  await act(async () => screen.unmount());
+  await act(async () => {
+    screen = ReactTestRenderer.create(<App />);
+  });
+  expectHeading('Personal OS');
+  expect(NativeCalendar.getAuthorizationStatus).toHaveBeenCalledTimes(3);
 });
 
 test.each(['Ask', 'Capture'])(
@@ -247,6 +302,7 @@ test('new shell controls retain minimum targets and uncapped text on a small scr
     }
   }
   expectTouchTarget('Open Settings');
+  expectTouchTarget('Open calendar today');
   expectScalableContent();
   await press('Open Settings');
   expectTouchTarget('Back to Today');
