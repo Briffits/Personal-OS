@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AACF00000000000000000004 /* CalendarEventsBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AACF00000000000000000014 /* CalendarEventsBridge.m */; };
+		AACF00000000000000000003 /* CalendarEventsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACF00000000000000000013 /* CalendarEventsModule.swift */; };
+		AACF00000000000000000002 /* EventKitCalendarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACF00000000000000000012 /* EventKitCalendarStore.swift */; };
+		AACF00000000000000000001 /* CalendarReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACF00000000000000000011 /* CalendarReader.swift */; };
 		AAEF00000000000000000002 /* HealthMedicationsBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AAEF00000000000000000012 /* HealthMedicationsBridge.m */; };
 		AAEF00000000000000000001 /* HealthMedicationsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAEF00000000000000000011 /* HealthMedicationsModule.swift */; };
 		AADE00000000000000000004 /* RemindersBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AADE00000000000000000014 /* RemindersBridge.m */; };
@@ -30,6 +34,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AACF00000000000000000014 /* CalendarEventsBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CalendarEventsBridge.m; sourceTree = "<group>"; };
+		AACF00000000000000000013 /* CalendarEventsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEventsModule.swift; sourceTree = "<group>"; };
+		AACF00000000000000000012 /* EventKitCalendarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitCalendarStore.swift; sourceTree = "<group>"; };
+		AACF00000000000000000011 /* CalendarReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarReader.swift; sourceTree = "<group>"; };
 		AAEF00000000000000000012 /* HealthMedicationsBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HealthMedicationsBridge.m; sourceTree = "<group>"; };
 		AAEF00000000000000000011 /* HealthMedicationsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMedicationsModule.swift; sourceTree = "<group>"; };
 		AADE00000000000000000014 /* RemindersBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RemindersBridge.m; sourceTree = "<group>"; };
@@ -103,6 +111,10 @@
 			children = (
 				AAEF00000000000000000011 /* HealthMedicationsModule.swift */,
 				AAEF00000000000000000012 /* HealthMedicationsBridge.m */,
+				AACF00000000000000000011 /* CalendarReader.swift */,
+				AACF00000000000000000012 /* EventKitCalendarStore.swift */,
+				AACF00000000000000000013 /* CalendarEventsModule.swift */,
+				AACF00000000000000000014 /* CalendarEventsBridge.m */,
 				AADE00000000000000000011 /* RemindersReader.swift */,
 				AADE00000000000000000012 /* EventKitRemindersStore.swift */,
 				AADE00000000000000000013 /* RemindersModule.swift */,
@@ -302,6 +314,10 @@
 			files = (
 				AAEF00000000000000000001 /* HealthMedicationsModule.swift in Sources */,
 				AAEF00000000000000000002 /* HealthMedicationsBridge.m in Sources */,
+				AACF00000000000000000001 /* CalendarReader.swift in Sources */,
+				AACF00000000000000000002 /* EventKitCalendarStore.swift in Sources */,
+				AACF00000000000000000003 /* CalendarEventsModule.swift in Sources */,
+				AACF00000000000000000004 /* CalendarEventsBridge.m in Sources */,
 				AADE00000000000000000001 /* RemindersReader.swift in Sources */,
 				AADE00000000000000000002 /* EventKitRemindersStore.swift in Sources */,
 				AADE00000000000000000003 /* RemindersModule.swift in Sources */,

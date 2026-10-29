@@ -3,8 +3,10 @@
 Base: `5f29b109368d7963e93f934228ee665b87dbe2f0`.
 Scope: a read-only Today → Calendar today → Back to Today view. This document
 and `app/src/calendar/calendar.ts` define the native contract before UI work.
-The VPS implements TypeScript, navigation and synthetic tests only. Native
-Calendar support is absent until the Mac work below is implemented and validated.
+The VPS checkpoint implements TypeScript, navigation and synthetic tests. The Mac
+native slice described below now implements the bridge and has passed synthetic
+native tests, unsigned builds and no-permission Simulator navigation checks.
+EventKit event delivery and physical-device validation remain outstanding.
 
 ## Contract: NativeModules.CalendarEvents
 
@@ -139,6 +141,16 @@ still-running underlying work gated, reject new work as busy until it finishes,
 and never publish its late rows. Authorization remains gated until the OS request
 settles. Back remains usable throughout; no automatic authorization retry.
 
+The deadline bounds the promise, not the underlying EventKit operation. If that
+operation never returns/calls back, the process-wide gate remains busy indefinitely.
+Retry, Back/re-entry, foreground return and module remount do not release it or
+start a second store operation. Status checks still work; no content is published
+by the expired operation. Once underlying work finishes, the gate releases and a
+subsequent explicit refresh can try again. If it never finishes, a cold process
+restart creates a new coordinator and checks OS authorization again; it neither
+proves native cancellation nor guarantees recovery from an OS-level problem.
+There is no automatic permission re-request or process restart.
+
 ## Screen refresh and privacy
 
 Data flow: `CalendarScreen → useCalendar → NativeCalendar → CalendarEvents`.
@@ -172,7 +184,10 @@ the snapshot's time zone so overnight spans are not misrepresented. Only screen
 memory holds event content. No persistent cache, analytics, logs, network calls,
 write methods, event editor or automatic settings navigation is introduced.
 
-## Exact remaining Mac work
+## Original Mac handover checklist
+
+Implementation and build items are completed in the Mac native slice below.
+The separately authorized runtime/device obligations remain outstanding.
 
 - Add a small `CalendarEvents` Swift module/Objective-C bridge with the methods
   above, an injected-store native reader/coordinator, and an EventKit adapter.
@@ -331,3 +346,195 @@ push; publication is a separate authorized step. No merge or installation is
 part of either step.
 
 Commit title: `Add read-only Calendar UI and native contract`.
+
+## Mac native slice — initial implementation checkpoint
+
+Started from verified PR #7 / `origin/feat/calendar-today-vps` head
+`5f3e4e3aab9808b72611ad7f46e620f193fff468`, in an isolated detached Mac worktree.
+PR #7 was verified open and draft. No shared TypeScript contract change was needed.
+
+### Implementation
+
+- `CalendarEventsModule.swift` and `CalendarEventsBridge.m` register exactly
+  `getAuthorizationStatus`, `requestAccess` and `fetchToday` as promise methods.
+  One lazy, main-confined coordinator survives module lifetimes; status inspection
+  does not create an EventKit store. Only explicit `requestAccess` may prompt,
+  including upgrading write-only access, and only when foregrounded. Errors expose
+  fixed codes and content-free text, never underlying EventKit errors.
+- `EventKitCalendarStore.swift` uses a separate lazy event store, full-event access
+  on iOS 17+, and the guarded legacy event request on older supported iOS. Store
+  ownership transfers exclusively between main-queue access requests and the serial
+  read worker under the coordinator gate. Only value projections cross back to main.
+  Reads use a bounded day predicate with `calendars: nil`, exclude canceled events,
+  and do not prompt or call the Reminders store.
+- `CalendarReader.swift` owns Gregorian local-day boundaries, half-open timed
+  overlap/point events, exclusive all-day civil spans, original recurrence-date
+  tuple identity, exact duplicate collapse/conflict rejection and deterministic
+  all-day-first ordering. IDs use JSON arrays; exact encoded bytes distinguish
+  Unicode variants, and tie ordering uses UTF-16 units to match JS ordinal order.
+  Full original spans are preserved; no recurrence expansion is implemented here.
+- Read and authorization promises have 30-second deadlines. A deadline settles
+  the promise without claiming cancellation; the operation remains busy until
+  underlying work finishes. Token guards ignore duplicate/late callbacks and
+  stale timers. Status inspection remains available during outstanding work.
+  Reads recheck access, local day and time zone before publishing.
+- The Xcode target registers the four production source files. Info.plist adds
+  full-access and legacy Calendar descriptions explaining that iOS requires full
+  access for reads while Personal OS does not edit events. No write-only usage
+  description, event mutations, content logging, persistence or event cache added.
+
+### SDK verification and limits
+
+Verified against Xcode 27.1 (27A9275), iPhoneOS 27.1 SDK headers `EKEvent.h`,
+`EKEventStore.h`, and Apple's documentation for
+[event access](https://developer.apple.com/documentation/eventkit/accessing-the-event-store),
+[bounded predicates](<https://developer.apple.com/documentation/eventkit/ekeventstore/predicateforevents(withstart:end:calendars:)>),
+and [original occurrence date](https://developer.apple.com/documentation/eventkit/ekevent/occurrencedate).
+The installed headers confirm original occurrence dates survive detached-instance
+start changes, floating/all-day values are returned in the default time zone,
+and synchronous event queries should run off the main thread.
+
+EventKit's synchronous `events(matching:)` API has no NSError/result-error channel.
+The implementation detects observable access loss, invalid projected data and
+deadlines; it cannot distinguish an undocumented internal failure that EventKit
+silently represents as an empty array from a successful empty query. No contract
+was changed and no permission or personal-data query was used to probe this.
+
+A time-zone change while continuously foregrounded is reflected on the **next
+refresh**. There is no immediate time-zone-change observer. Native completion
+rejects a day/zone change during a read. EventKit's actual floating/all-day delivery,
+recurrence discrimination and retained-store behavior across permission changes
+still require authorized synthetic runtime validation.
+
+### Mac validation
+
+- `bash ios/tests/run-calendar-checks.sh`: **134 synthetic assertions passed**.
+  The first pass had 125; additional ordering, serialized wire-shape, missing
+  endpoint and authorization-error assertions increased the final count. Tests
+  construct no EKEventStore and perform no access request. They cover 23/25-hour
+  DST days, half-hour DST, non-hour zones, a skipped civil day, leap day, local vs
+  UTC date, midnight endpoints and point events, all-day/multi-day spans, missing
+  and invalid data, recurring/detached identities, duplicate conflicts, Unicode
+  identity/order, cancellation, all access states, access loss, concurrent calls,
+  deadlines, late/duplicate callbacks and day/zone changes during reads.
+- `./node_modules/.bin/tsc --noEmit`: passed.
+- `npm run lint -- --max-warnings=0`: passed.
+- `npm test -- --runInBand --watchman=false NativeCalendar CalendarScreen App.test`:
+  **3 suites / 119 tests passed**. This is the affected-suite run; the earlier VPS
+  full-suite result is historical, not a new full-suite Mac run.
+- Generic-iOS Release `xcodebuild`, with `CODE_SIGNING_ALLOWED=NO` and
+  `CODE_SIGNING_REQUIRED=NO`, separate DerivedData and Metro startup disabled:
+  **BUILD SUCCEEDED**. Static product inspection confirms Calendar registration
+  selectors, both usage descriptions and bundled JavaScript. No app was launched;
+  this does not establish a live React Native/EventKit bridge round trip.
+- Complete diff whitespace check passed. Dependency and lockfiles, deployment
+  targets, signing settings, storage, Health and Reminders sources are unchanged.
+  Existing matching dependency/Pods directories were copied independently; no
+  dependencies were installed. Existing worktrees, changes, stashes, Metro and
+  installed apps were preserved. No commit, push or merge was performed.
+
+### Remaining runtime work (not performed)
+
+Use only a separately authorized synthetic Calendar account/device: an isolated
+bundle does not isolate EventKit data. Verify live bridge payloads, full-access
+allow/deny/write-only upgrade, Settings return/revocation, reads after access
+changes, floating/all-day and detached recurrence delivery across zones/DST,
+foreground edits/refresh, offline local events, midnight rollover, VoiceOver
+focus/order, largest Dynamic Type, small-screen layout and light/dark appearance.
+No personal calendar data, actual permission prompt, installation, physical-phone
+launch or device test was part of this Mac slice.
+
+### Exact Mac diff relative to the verified checkpoint
+
+Added:
+
+```text
+app/ios/CalendarReader.swift
+app/ios/EventKitCalendarStore.swift
+app/ios/CalendarEventsModule.swift
+app/ios/CalendarEventsBridge.m
+app/ios/tests/CalendarTests.swift
+app/ios/tests/run-calendar-checks.sh
+```
+
+Modified:
+
+```text
+app/ios/PersonalOS.xcodeproj/project.pbxproj
+app/ios/PersonalOS/Info.plist
+docs/CALENDAR.md
+```
+
+## Mac final review and Simulator validation
+
+Reviewed the complete native diff against this contract and the unchanged
+`app/src/calendar/calendar.ts`. One concrete implementation issue was corrected:
+Foundation can produce a historical Julian leap date (for example `1500-02-29`)
+through its Gregorian calendar. Native civil-date serialization now checks the
+wire contract's Gregorian leap rules and rejects such invalid dates as
+`read-failed`, rather than returning a payload the JS adapter rejects. Regression
+tests cover the invalid historical date and the valid Gregorian century leap
+date `1600-02-29`.
+
+The timeout recovery description above is now explicit: a never-returning native
+operation can keep the process-wide gate busy indefinitely. Repeated retries do
+not launch another operation; status inspection and Back remain usable. A late
+completion releases the gate without publishing stale content. A cold process
+restart creates a new coordinator, but does not establish cancellation or promise
+recovery from an OS fault. Additional tests cover repeated retries while no native
+completion arrives. No unsafe gate reset, second store or invented error signal
+was added. EventKit's silently returned empty-array limitation remains unchanged.
+
+The review also confirmed explicit-only foreground access requests, write-only
+read rejection, bounded native predicates, full original timed/all-day spans,
+original recurrence discrimination, exact duplicate/conflict handling, ordinal
+ordering, access/day/zone rechecks, fixed content-free errors, source registration
+and both permission descriptions. No other blocking implementation finding was
+identified within this slice. No storage, Health/Reminders, dependency, signing,
+deployment-target or shared TypeScript changes were made.
+
+### Evidence categories
+
+**Synthetic/native:** final focused runner passed **146 assertions**, including
+the review regressions. Static SDK access mapping tests instantiate no EventKit
+store. TypeScript and zero-warning lint passed; affected Jest suites passed
+**3 suites / 119 tests**. The unsigned generic-iOS Release build passed after the
+date-validation correction. Earlier VPS full-suite results remain historical.
+
+**Simulator runtime:** built a bundled-JavaScript Release with Metro startup
+disabled, installed only on a newly created isolated iPhone 17 Pro Simulator
+running iOS 27.0, and ran an external XCTest UI harness. **One UI test passed,
+zero failures.** It verified:
+
+- Today startup and Today → Calendar → Back navigation, including re-entry.
+- The real adapter displayed the exact `notDetermined` explanation and explicit
+  Allow Calendar access button, rather than native-unavailable or empty-events UI.
+  This verifies runtime module availability: the adapter checks all three native
+  methods before calling `getAuthorizationStatus`. It does not exercise the
+  permission request or event-read methods.
+- Three Refresh events taps kept the same unrequested-access state. Application
+  and SpringBoard alert checks found no prompt before/after navigation and refresh.
+- No Allow Calendar access, Settings or permission-dialog control was tapped.
+  Read-only inspection of this new Simulator's Calendar permission metadata found
+  no app-specific decisions before or after the test. No account was connected,
+  permission granted/reset, or event data queried.
+
+The external UI harness, screenshots and xcresult are retained with local build
+evidence, outside the repository. No harness code or launch switch was injected
+into the production app. The UI harness itself is not an event-data test.
+
+**Outstanding physical/runtime:** actual allow/deny/write-only upgrade and Settings
+return/revocation, authorized event reads and post-access-change behavior,
+EventKit floating/all-day and recurring/detached occurrence delivery across zones
+and DST, foreground event edits, local offline records, midnight rollover, and
+physical VoiceOver/layout/Dynamic Type/appearance checks remain unperformed.
+These require a separately authorized synthetic-only Calendar environment; no
+physical iPhone was installed, launched or queried during this review.
+
+A continuously foregrounded time-zone change still takes effect on the next
+refresh only. No immediate time-zone-change detection is claimed.
+
+Only the nine files listed in the Mac diff above are included in the native
+follow-up. Existing changes, worktrees, stashes, Metro, production PersonalOS and
+both Health test apps were preserved. Publication keeps PR #7 draft; no merge is
+part of this work.

@@ -33,6 +33,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Personal OS reads your calendar events to show today’s schedule. iOS requires full calendar access for reading; Personal OS does not create, change or delete events.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Personal OS reads your calendar events to show today’s schedule. iOS requires full calendar access for reading; Personal OS does not create, change or delete events.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Personal OS reads your reminders to show incomplete tasks due today. It does not change your reminders.</string>
 	<key>NSRemindersUsageDescription</key>
