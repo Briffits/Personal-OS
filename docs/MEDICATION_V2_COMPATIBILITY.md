@@ -1,12 +1,17 @@
 # Medication v2 compatibility — implementation and validation
 
-Review date: 28 October 2026. No commit, push, merge, installation or launch.
+Implementation review: 28 October 2026. Rehearsal evidence reviewed: 29 October 2026.
+
+Both isolated synthetic device rehearsals completed successfully against implementation
+commit `09c5a4bef3752d229f9f40d80ba248f6fc460327`. This update changes documentation
+only; no production installation or merge was performed. See the
+[sanitised evidence summary](MEDICATION_V2_REHEARSAL_EVIDENCE.md).
 
 ## Provenance and scope
 
-- New durable worktree: `/Users/Craxoid/Developer/PersonalOS-medication-v2-compatibility`.
 - Branch: `feat/medication-v2-compatibility`.
-- Verified base and unchanged HEAD: `14bae037ff3f7c6febe9016ea4e9d693f8fc825c` (fetched origin/main).
+- Implementation parent: `14bae037ff3f7c6febe9016ea4e9d693f8fc825c`.
+- Tested implementation checkpoint: `09c5a4bef3752d229f9f40d80ba248f6fc460327`.
 - Selectively adapted Phase 1 reference: `39e8f589d7b45adcbd2973f93059e2aa38cc02c4`; no old-branch merge.
 - Recorded installed-v2 source: `a7a78c0d17d2f74376d7d6caa5fc4c9f013d218e`; its medication source matches baseline `ce7e0542d85778f441a5773683cb865d1c15feee`. The preceding review verified the 15-file icon/startup-only diff and clean v2 worktree. Existing build evidence establishes historical Today/icon acceptance, not retained-device storage correctness.
 
@@ -14,7 +19,7 @@ The change adds complete-envelope v1 migration, zero-write v2 reads, matching na
 
 No Keychain wrapper, bridge, project, scheme, entitlement, signing, deployment, dependency or lockfile change. Existing main Health access, navigation and Reminders implementation remain in place. No old Health integration, queries, link controls or threshold-editing commands were imported. Existing dependencies/Pods/generated iOS sources were independently copied from the matching main-icon worktree; package and Pod locks match, with no installs or dependency changes.
 
-## Exact checkpoint allowlist — proposed, not staged
+## Committed implementation checkpoint scope
 
 Modified:
 
@@ -47,9 +52,13 @@ app/test-utils/fixtures/medication-v2.json
 docs/MEDICATION_V2_COMPATIBILITY.md
 ```
 
-The two lists above are the exact 21-file checkpoint allowlist. Do not use a broad add. Recheck the staged diff against this list only if staging/commit is later authorized. Exclude copied node_modules/Pods/generated build files, DerivedData, local logs/patches, signing files, profiles, credentials, device exports, all existing other-worktree changes, and all future rehearsal targets/configuration. Nothing is staged or committed.
+The two lists above are the exact 21-file implementation checkpoint scope, committed
+and pushed before rehearsal. This follow-up changes only this report and adds the
+sanitised evidence summary. Rehearsal targets/configuration, dependencies/build output,
+private logs, profiles, credentials, device exports and unrelated worktree changes
+remain excluded from the compatibility PR.
 
-Production changes are one native store, matching model/service and manual stock helpers, plus the existing card/screen. Remaining changes are synthetic fixtures/tests and documentation. No files deleted. The complete patch including untracked additions is exported outside Git to `/tmp/personalos-medication-v2-compatibility-reviewed.patch`. The original `/tmp/personalos-medication-v2-compatibility.patch` is preserved as pre-review evidence.
+Production changes are one native store, matching model/service and manual stock helpers, plus the existing card/screen. Remaining changes are synthetic fixtures/tests and documentation. No files deleted. Reviewed and pre-review patch exports are retained privately outside Git.
 
 ## Original implementation validation (historical)
 
@@ -83,21 +92,10 @@ xcodebuild -workspace ios/PersonalOS.xcworkspace -scheme PersonalOS \
 
 The initial sandboxed Xcode attempt failed before compilation while accessing workspace/services. The identical unsigned build succeeded outside the sandbox. Swift package/prescription regressions likewise needed compiler-cache access outside the sandbox. Dependency/generated JavaScript and script-output warnings remain; no build errors. No project or deployment configuration was changed to make the build pass.
 
-Local evidence (outside Git):
-
-- `/tmp/personalos-medication-v2-compatibility-jest.log` — initial full run, including the two resolved failures.
-- `/tmp/personalos-medication-v2-service-retest.log` — 38/38 affected tests passed.
-- `/tmp/personalos-medication-v2-version-retest.log` — final 76/76 validation/UI/adapter tests passed.
-- `/tmp/personalos-medication-v2-native-final.log` — final 22 native cases and downgrade check.
-- `/tmp/personalos-medication-v2-build-final.log` — final incremental unsigned build succeeded.
-- `/tmp/personalos-medication-v2-compatibility-build.log` — sandbox failure.
-- `/tmp/personalos-medication-v2-compatibility-build-unrestricted.log` — successful unsigned build.
-- `/tmp/personalos-medication-v2-reminders-native-unrestricted.log`.
-- `/tmp/personalos-medication-v2-startup-native-unrestricted.log`.
-- `/tmp/personalos-medication-v2-prescription-native.log`.
-- Medication runner retained synthetic executables and migrated JSON in the reported `personalos-medication-v2.JVYKbE` temporary directory.
-
-Raw build logs should stay local and be reviewed before publication. They are not repository artifacts.
+Local logs and synthetic runner outputs remain private. The final native, affected
+Jest and unsigned-build logs were inspected for this documentation update; their
+results match the counts below. Earlier regression results remain historical rather
+than newly rerun evidence. Raw logs are not repository artifacts.
 
 ## Independent review findings and repairs
 
@@ -127,50 +125,97 @@ No additional concrete defect was found in the following reviewed paths:
 | Incremental unsigned iOS Debug build | Succeeded, exit 0; no signing/install/launch                                                                                 |
 | Diff/allowlist check                 | 21 files; no deployment, dependency, Keychain-wrapper or bridge changes                                                      |
 
-Initial review regression execution exposed the Foundation leading-BOM bug and failed the native case; that led to the decoder repair rather than weakening the assertion. A control-character regex lint warning was corrected using named whitespace escapes. Final logs are `/tmp/personalos-medication-v2-review-native-fixed.log`, `/tmp/personalos-medication-v2-review-jest-fixed.log`, and `/tmp/personalos-medication-v2-review-build.log`. The synthetic native harness is retained in `personalos-medication-v2.Y35jOb` under the system temporary directory. Original logs remain preserved. Unchanged standalone Reminders/startup/prescription suites were not rerun; their earlier results remain historical. The build compiles current main's native integrations, and no real data/permissions were queried.
+Initial review regression execution exposed the Foundation leading-BOM bug and
+failed the native case; that led to the decoder repair rather than weakening the
+assertion. A control-character regex lint warning was corrected using named
+whitespace escapes. Final native/Jest/build logs remain private. Unchanged
+standalone Reminders/startup/prescription suites were not rerun; their earlier
+results remain historical. No tests or device actions were repeated for this
+documentation update.
 
-## Isolated upgrade rehearsal — plan only
+## Completed isolated device rehearsals
 
-### Existing iPhone assessment and identity gate
+Both chains used synthetic data, separate private app identities and prepared
+Release candidates at the tested implementation commit. Within each chain,
+fixture 100 → candidate 200 → inspector 300 → candidate 400 → inspector 500
+used in-place upgrades without uninstall/reseed. Candidates embedded JavaScript;
+Metro was not used or changed. Inspectors read raw medication bytes only after
+an explicit snapshot action; they do not migrate or initialise medication data.
 
-The existing iPhone can host the core rehearsal alongside production/v2, **conditional on verifying isolation before installation**. A separate physical device is not inherently required for migration, v2 preservation, decimals, unlinking or UI accessibility.
+Signing, effective private Keychain groups, profile trust/validity, artifact hashes
+and connected-device coverage passed before transitions. No production/shared
+access group was claimed. The fixture harness needed a scene-lifecycle correction;
+only the isolated harness changed, and all candidate hashes remained unchanged.
 
-Proposed test bundle ID: `com.briffits.personalos.medication-rehearsal` (availability/provisioning not checked). Both fixture build and candidate must resolve to that exact ID and the same actual App ID prefix, team and effective private Keychain group. Use the app's private application-identifier group, `<AppIdentifierPrefix>com.briffits.personalos.medication-rehearsal`, as its sole effective group. Do not assume the prefix always equals the team ID. Do not add production groups, wildcard group entitlements, App Groups, shared containers, iCloud containers or extensions. A distinct display name/icon must make the test app unmistakable.
+### Automated persisted comparisons
 
-Apple documents that absent an explicit group, inserts use the default group while queries/updates search all accessible groups. The unchanged production wrapper omits a group, so isolation depends on the **effective signed entitlements**, not merely an xcconfig or bundle-ID label. Inspect the two signed artifacts and their provisioning entitlements locally before any install: resolved bundle/application IDs, prefix, team, default/access groups and absence of shared containers. Record source/overlay hashes, artifact hashes, resolved identities and the intended synthetic fixture in a local pair manifest. Their access sets must contain no production group. Do not test isolation by querying production items. See [Apple's Keychain access-group rules](https://developer.apple.com/documentation/security/ksecattraccessgroup) and [private-group/default-group behavior](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps).
+- **V1:** baseline A matched the four-record schema-1/revision-7 fixture. B matched
+  the complete expected migration at schema 2/revision 8 after repeated candidate
+  visits. IDs, names, links, null/zero/max-safe stock and pending state survived;
+  no stock baseline or Health source was fabricated. Final C matched the approved
+  ledger at revision 12: record 1 renamed, baseline 0.1 with one addition of 0.2,
+  legacy stock cleared and both matching prescription links cleared. Every other
+  field matched B.
+- **Existing v2:** A and B were byte-for-byte and SHA-256 identical to the six-record
+  frozen fixture at schema 2/revision 42 after repeated visits. Final C matched
+  the explicitly approved v2 ledger at revision 46: record 2 renamed; record 1's
+  old baseline/history intentionally replaced with baseline 0.1 and exactly one
+  addition of 0.2; all six prescription links cleared. Every threshold, opaque
+  Health reference and unrelated field survived. In particular, records 2/3's
+  original baseline/addition objects remained unchanged.
+- Each final export retained earlier A/B snapshots byte-identically. Snapshot
+  summaries matched raw-file hashes; comparisons checked field sets, values,
+  record order and addition count. Generated baseline/addition UUIDs, references
+  and timestamp order were validated against the run, not assumed stable from
+  an unobserved intermediate snapshot.
 
-Keep service/account strings and `WhenUnlockedThisDeviceOnly`/nonsynchronizing protection unchanged **inside the test app**: separation comes from its private access group. Keep production sources and production identity unchanged. A prefix change can lose access on update even with the same bundle suffix; see [Apple TN2311](https://developer.apple.com/library/archive/technotes/tn2311/_index.html). Provisioning eligibility, signing certificate and device registration remain unverified here; no account, Keychain or device lookup was performed.
+### User observations (separate evidence)
 
-### Build pair and harness boundary
+The user confirmed three read-only Medication visits and two cold relaunches in
+both chains, without errors or changed displays. Only newly confirmed v1 visits
+count; pre-interruption visits were not confirmed. Both mutation runs displayed
+0.3 after one 0.2 addition and retained it after a subsequent cold restart. Ordinary
+app switching/navigation was recorded separately and was not counted as a restart.
+Cancellation retained the synthetic prescription; confirmed deletion left the
+expected medications present and unlinked. In v2, records 2/3 retained unavailable/
+confirmation-required stock labels and offered no stock actions; record 2 retained
+its unavailable label after renaming. These are UI observations, not per-step
+persisted-state measurements.
 
-Prepare future rehearsal artifacts in a separate durable rehearsal checkout/overlay, excluded from this checkpoint:
+### Failures resolved during rehearsal
 
-- **Fixture build A:** dedicated fixture-only target signed as the test identity, using the pinned `14bae037…` v1 store for its medication operations. Compile fixture seeding/inspection controls only into this target or its hosted XCTest bundle, never behind production runtime flags. Seed explicit synthetic v1 envelopes (empty, multi-record null/zero/max, pending) only in this test app's private group. Read back and record synthetic bytes/revision before proceeding. Seeder must refuse an unexpected application identity or pre-existing unrecognized state; do not assume uninstall removed Keychain state.
-- **Candidate build B:** exact reviewed candidate source and production medication paths, signed as the same test identity, with a higher build number. No fixture seeding or fault switches in its executable. If inspection is needed, use a separate hosted XCTest bundle, not production startup/bridge code. Keep native code and JS bundle from the same source revision.
-- Use the same private group, application identifier, supported signing team/prefix and container identity for A and B. Install B **over A without uninstall/reset** after separate authorization. That is the actual in-place update being rehearsed; changing the bundle ID between A and B would instead create another app.
-- Use embedded JS bundles, not the production/v2 Metro server. Future rehearsal-only entitlements should omit Health/shared-container capabilities, and the run must never enter Health or Reminders access screens or document pickers. Current Today startup does not initialize medication or query those integrations. Use synthetic prescription documents generated within the test app's private container; no user documents or shared storage.
-- For existing-v2 testing, prepare a separate fixture-only build A2 under the same identity before a separate B upgrade cycle. A2 seeds the frozen v2 bytes, including threshold/source data. It must bypass the v1 reader, which correctly refuses v2. Any between-cycle replacement of test state requires explicit, narrowly scoped authorization and confirmation that the state is synthetic. Alternatively use a fresh unique test bundle suffix per cycle, fixed within each A/B pair. No production identity is used.
+The first fixture installation encountered the free-profile app quota. Later
+explicitly authorised test-app retirement resolved capacity; completed v1 evidence
+was backed up before v1 retirement for the separate v2 chain. The earlier
+Reminders test retirement was separately authorised; both Health test apps were
+preserved. The harness startup defect was corrected before
+successful seeding. Local launch-command syntax errors were corrected with retained
+failed receipts. One v1 snapshot transfer was denied and succeeded on an authorised
+retry after unlocking; this is not a systematic Keychain lock/unlock test. No
+migration or final-field comparison mismatch remained. No failure was hidden by
+resetting or reseeding a measured store.
 
-### Rehearsal matrix and evidence
+## Remaining gaps and merge assessment
 
-1. **V1 upgrade:** run separate empty, multi-record and pending cycles. After A→B, read through the actual bridge/UI; expect v2, revision +1 exactly once, unchanged IDs/names/links/null/zero/max values, no fabricated baseline/time/source/threshold, and unchanged singleton recovery entries. Complete pending name once and check ID/quantity.
-2. **Existing v2:** A2→B keeps frozen bytes and revision on entry and repeated launches. Inspect synthetic bytes before/after through the test-only inspection harness. Byte equality alone does not prove no identical-value write occurred: zero write-call evidence comes from the deterministic injected-store tests (or a test-only observer wrapper), not from byte comparison.
-3. **Repeated launches:** cold launch and navigate to Medication multiple times, then relaunch after a successful operation. No duplicate migration, ID allocation, stock addition or resurrection from singleton copies.
-4. **Decimal/manual operations:** enter `0.1` then add `0,2`, observe recorded `0.3`; test zero correction, invalid input, boundary overflow and ineffective additions. Inspect that baseline/addition identities, other records, thresholds and sources change only where intended. Physical correction intentionally supersedes that record's stock history.
-5. **Prescription unlink:** use a synthetic retained prescription and generated synthetic document in the test app container. Confirm deletion through the ordinary UI/coordinator; every matching medication link clears, all stock/source fields survive, and unrelated links/records remain. Also test cancellation and injected failed/uncertain unlink without deleting the prescription prematurely.
-6. **Unavailable-source UI:** same-token link, mismatched link, link without baseline, and retained source with no active link all keep opaque data and expose no stock commands. Gross stock is never shown as current. Name edits and prescription unlink still work. No Health query/permission is needed.
-7. **Invalid/version and accessibility:** malformed and unsupported synthetic envelopes block writes without defaults. Check VoiceOver actions/destructive index, Dynamic Type, decimal-comma keyboard and offline operation. A downgrade rejection demonstration uses only the test identity/fixtures; never replace production/v2.
+| Gap | Existing evidence and limit | Assessment for this compatibility change |
+| --- | --- | --- |
+| Intermediate revisions and generated IDs before unlink | Device snapshots measure A/B/C, not each operation. Native revision/stale-write and full-record tests cover command boundaries. Final delta is +4 in each mutation ledger. | No unexplained final delta or field loss; intermediate device revisions remain unmeasured. |
+| Zero correction, invalid/boundary input and comma keyboard | Native fractional/correction tests include zero replacement; MedicationScreen tests reject invalid input without writes; compatibility tests exercise `0,2`, decimal totals and boundary rejection. Both device additions used `0.2`; zero/invalid/comma-input device cases were deferred. | Automated coverage exists; physical keyboard/input coverage is not claimed. No extra device run required for this documentation update. |
+| Unsupported source writes | UI menus hid stock actions on device; native injected-store tests reject same-token, different-token, retained-source and missing-baseline cases without writes. | No native bypass/fault injection was attempted on the phone. |
+| Accessibility | Renderer tests cover labels and long-press/VoiceOver action parity. | Real VoiceOver focus/reading order, largest Dynamic Type, small-screen layout and visual contrast were not established by these rehearsals; retain as manual release-validation gaps. |
+| Lock/unlock and offline conditions | Existing protection policy is unchanged; injected read errors distinguish inaccessible data from absence and block unsafe writes. | No systematic lock/unlock, locked mutation, network-disconnected launch or physical protected-storage recovery test. The transfer retry is not a substitute. |
+| Failure/downgrade and other fixture shapes | In-memory tests cover empty/pending v1, malformed/future schemas, failed/lost-acknowledgement writes, stale retries, zero-write v2 reads and pinned-v1 downgrade rejection. | Physical power-loss, interruption inside a Keychain write, cross-device restore and production-identity access remain untested/out of scope. |
 
-### Deterministic faults versus physical interruption
+No unresolved correctness or preservation failure was identified as a merge blocker
+for this scoped implementation from the reviewed evidence. That is a scoped review
+finding, not approval to merge or deploy, and does not assert current branch
+protection/CI approval. Accessibility and physical protection-state coverage remain
+explicit release-validation gaps; this update neither waives them nor expands device
+testing automatically. Existing valid-v2 byte equality does not prove zero
+identical-value writes; that guarantee is supported by injected write-call tests.
 
-The existing `MedicationKeychainAccess` injection boundary supports deterministic tests without production flags or real Keychain data. In XCTest/in-memory stores, separately inject: read failure before migration, write rejection before publication, successful complete-envelope publication followed by lost acknowledgement, and read-back failure/mismatch. Assert exact old/new envelopes, revisions, retry behavior and no automatic replay. Label these **injected failures**, not physical Keychain interruptions. A test-only hosted harness may wrap the real _test-group_ store for before-call or after-success/acknowledgement faults, but that is distinct from the unmodified candidate acceptance run.
-
-Physical force-quit/termination is a separate optional observational test after authorization. Record operation initiation, any completion signal, termination timing and the synthetic envelope after restart. A killed app does not establish that `SecItemUpdate` was executing at that instant, and the system service may finish independently. A pause before the call proves only pre-write termination; a pause after success proves an acknowledgement-loss window. Neither proves interruption inside a write. Report timing as unknown unless independently evidenced; never claim power-loss/atomicity guarantees from process termination alone.
-
-### What needs another device
-
-No core rehearsal case above inherently requires a second device once private identity isolation is verified. Lock/unlock of the existing iPhone can be a separately authorized test but momentarily affects the whole phone. Tests involving deliberate power loss, OS restore/erase, passcode removal, global permission resets, destructive storage pressure or reboots that would disrupt normal use belong on a spare device if requested. Backup/restore and cross-device `ThisDeviceOnly` behavior genuinely need a second device and/or a disposable restore target. Live Health tests requiring a clean synthetic-only Health database also need a separate environment to avoid touching the everyday Health store; they are outside this compatibility rehearsal. Neither a second device nor this rehearsal can prove access to production retained data without testing that production identity, which remains explicitly prohibited.
-
-No rehearsal artifact, signing overlay or harness has been created in this review. Installation, launch, synthetic device writes and permissions require a later explicit instruction. Production/v2, Metro, existing worktrees, stashes and diagnostic evidence remain untouched.
-
-Suggested future commit message: `Preserve medication v2 storage and migrate v1 safely`.
+The v1 harness is a pinned old-store fixture, not every historical production UI.
+Neither rehearsal proves access to a production identity. No reverse migration is
+provided; the pinned v1 reader rejects v2. Private evidence and backups are retained
+outside version control. Only the sanitised summary and this documentation update
+belong in the follow-up commit.
