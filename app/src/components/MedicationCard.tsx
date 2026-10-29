@@ -1,3 +1,8 @@
+import {
+  calculateStock,
+  canChangeStock,
+  recordedQuantity,
+} from '../medications/medicationStock';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import AppCard from '../design-system/components/AppCard';
 import {
@@ -10,11 +15,16 @@ import type { MedicationRecord } from '../medications/medication';
 
 export type MedicationAction = 'add' | 'record' | 'correct' | 'edit' | 'delete';
 export function medicationActions(record: MedicationRecord) {
+  const stockActions = canChangeStock(record)
+    ? [
+        recordedQuantity(record) === null
+          ? { name: 'record' as const, label: 'Record current stock' }
+          : { name: 'add' as const, label: 'Add stock' },
+        { name: 'correct' as const, label: 'Correct stock' },
+      ]
+    : [];
   return [
-    record.stock === null
-      ? { name: 'record' as const, label: 'Record current stock' }
-      : { name: 'add' as const, label: 'Add stock' },
-    { name: 'correct' as const, label: 'Correct stock' },
+    ...stockActions,
     { name: 'edit' as const, label: 'Edit medication' },
     { name: 'delete' as const, label: 'Delete medication' },
   ];
@@ -32,10 +42,17 @@ export default function MedicationCard({
   onLongPress: () => void;
 }) {
   const theme = usePersonalOSTheme();
+  const stock = calculateStock(record);
   const description =
-    record.stock === null
+    'quantity' in stock
+      ? `Recorded stock: ${stock.quantity} units`
+      : stock.status === 'unrecorded'
       ? 'Stock not recorded'
-      : `Recorded stock: ${record.stock} tablets`;
+      : stock.status === 'health-unavailable'
+      ? 'Current stock unavailable — linked stock is not calculated in this version.'
+      : stock.status === 'confirmation-required'
+      ? 'Stock needs confirmation — its saved source is not supported in this version.'
+      : 'Saved stock could not be read.';
   const actions = disabled ? [] : medicationActions(record);
   return (
     <AppCard style={styles.card}>

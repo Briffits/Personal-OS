@@ -1,3 +1,5 @@
+import { recordedQuantity } from '../src/medications/medicationStock';
+import { stockFields } from '../test-utils/medicationFixture';
 import { createMedicationService } from '../src/medications/medicationService';
 import {
   validateCollection,
@@ -38,7 +40,7 @@ test('many medications can link to one prescription and each holds only one link
   expect(state.records[0]).toEqual({
     id: firstId,
     displayName: 'Renamed',
-    stock: 12,
+    ...stockFields(12),
     prescriptionId: otherPrescriptionId,
   });
   state = await service.saveDetails(
@@ -50,7 +52,7 @@ test('many medications can link to one prescription and each holds only one link
   expect(state.records[1]).toEqual({
     id: secondId,
     displayName: 'Same name',
-    stock: null,
+    ...stockFields(null),
     prescriptionId,
   });
 });
@@ -88,7 +90,7 @@ test('new links are verified; unchanged links and unlinked edits survive unavail
   expect(state.records[0]).toEqual({
     id: firstId,
     displayName: 'Renamed',
-    stock: 15,
+    ...stockFields(15),
     prescriptionId: null,
   });
   expect(exists).toHaveBeenCalledTimes(2);
@@ -103,7 +105,7 @@ test('new medication has no fabricated stock; deletion affects only selected med
   });
   expect(state.records[2]).toMatchObject({
     displayName: 'Example three',
-    stock: null,
+    ...stockFields(null),
     prescriptionId: null,
   });
   state = await service.remove(state, firstId);
@@ -124,32 +126,38 @@ test('stock arithmetic preserves identity, links and all other medication fields
   expect(state.records[0]).toEqual({
     ...initial.records[0],
     prescriptionId,
-    stock: 15,
+    ...stockFields(15),
   });
   state = await service.changeStock(state, secondId, 'record', '0');
   state = await service.changeStock(state, secondId, 'add', '2');
   state = await service.changeStock(state, firstId, 'correct', '0');
-  expect(state.records.map(record => record.stock)).toEqual([0, 2]);
+  expect(state.records.map(record => recordedQuantity(record))).toEqual([0, 2]);
 });
 
-test.each(['', '-1', '1.5', 'NaN', 'Infinity', '1e3', '9007199254740992', '0'])(
-  'invalid stock addition %p never writes',
-  async input => {
-    const store = medicationFixture();
-    const service = createMedicationService(store, jest.fn());
-    expect(() =>
-      service.changeStock(store.state(), firstId, 'add', input),
-    ).toThrow();
-    expect(store.mutate).not.toHaveBeenCalled();
-  },
-);
+test.each([
+  '',
+  '-1',
+  '1.2.3',
+  'NaN',
+  'Infinity',
+  '1e3',
+  '9007199254740992',
+  '0',
+])('invalid stock addition %p never writes', async input => {
+  const store = medicationFixture();
+  const service = createMedicationService(store, jest.fn());
+  expect(() =>
+    service.changeStock(store.state(), firstId, 'add', input),
+  ).toThrow();
+  expect(store.mutate).not.toHaveBeenCalled();
+});
 
 test('overflow, unrecorded addition, double recording and unknown IDs reject', () => {
   const state = initialCollection();
   const store = medicationFixture({
     ...state,
     records: [
-      { ...state.records[0], stock: Number.MAX_SAFE_INTEGER },
+      { ...state.records[0], ...stockFields(Number.MAX_SAFE_INTEGER) },
       state.records[1],
     ],
   });
@@ -175,12 +183,12 @@ test('reusing a snapshot cannot apply stock twice', async () => {
   await expect(
     service.changeStock(snapshot, firstId, 'add', '3'),
   ).rejects.toMatchObject({ code: 'stale-state' });
-  expect(store.state().records[0].stock).toBe(15);
+  expect(recordedQuantity(store.state().records[0])).toBe(15);
 });
 
 test('completion retains pending ID/stock and leaves prescription link null', async () => {
   const store = medicationFixture({
-    schemaVersion: 1,
+    schemaVersion: 2,
     revision: 0,
     records: [],
     pendingLegacy: { id: firstId, stock: 0, prescriptionId: null },
@@ -190,7 +198,7 @@ test('completion retains pending ID/stock and leaves prescription link null', as
   expect(state.records).toEqual([
     {
       id: firstId,
-      stock: 0,
+      ...stockFields(0),
       displayName: 'Saved example',
       prescriptionId: null,
     },
@@ -218,13 +226,18 @@ test.each([undefined, [], '', 'bad', [prescriptionId], { id: prescriptionId }])(
 );
 
 test.each([
-  { schemaVersion: 2 },
   { revision: -1 },
   { revision: true },
   { pendingLegacy: undefined },
   { records: [...initialCollection().records, initialCollection().records[0]] },
-  { records: [{ ...initialCollection().records[0], stock: true }] },
-  { records: [{ ...initialCollection().records[0], stock: undefined }] },
+  {
+    records: [{ ...initialCollection().records[0], legacyRecordedStock: true }],
+  },
+  {
+    records: [
+      { ...initialCollection().records[0], legacyRecordedStock: undefined },
+    ],
+  },
   { records: [{ ...initialCollection().records[0], displayName: ' ' }] },
   { pendingLegacy: { id: firstId, stock: 0, prescriptionId } },
 ])('malformed collection cannot be accepted: %p', changes => {
@@ -256,4 +269,75 @@ test('invalid prescription ID cannot start an unlink read or write', async () =>
   });
   expect(store.read).not.toHaveBeenCalled();
   expect(store.mutate).not.toHaveBeenCalled();
+});
+
+test('fractional correction creates a baseline; additions remain scoped; correction replaces both', async () => {
+  const store = medicationFixture();
+  const service = createMedicationService(store, jest.fn());
+  let state = await service.changeStock(
+    store.state(),
+    firstId,
+    'correct',
+    '2.5',
+  );
+  const baseline = state.records[0].stockBaseline!;
+  expect(state.records[0].legacyRecordedStock).toBeNull();
+  expect(baseline.quantity).toBe(2.5);
+  state = await service.changeStock(state, firstId, 'add', '0,5');
+  expect(state.records[0].stockBaseline).toEqual(baseline);
+  expect(state.records[0].stockAdditions).toEqual([
+    expect.objectContaining({ baselineId: baseline.id, quantity: 0.5 }),
+  ]);
+  state = await service.changeStock(state, firstId, 'correct', '0');
+  expect(state.records[0].stockBaseline?.id).not.toBe(baseline.id);
+  expect(state.records[0].stockAdditions).toEqual([]);
+  expect(state.records[0].lowStockThreshold).toBeNull();
+});
+
+test('failed baseline write retains legacy; an uncertain write is not replayed', async () => {
+  const store = medicationFixture();
+  const service = createMedicationService(store, jest.fn());
+  store.mutate.mockRejectedValueOnce({ code: 'write-failed' });
+  await expect(
+    service.changeStock(store.state(), firstId, 'correct', '2.5'),
+  ).rejects.toMatchObject({ code: 'write-failed' });
+  expect(store.state().records[0].legacyRecordedStock).toBe(12);
+  const mutate = store.mutate.getMockImplementation()!;
+  store.mutate.mockImplementationOnce(async (...args) => {
+    await mutate(...args);
+    throw { code: 'commit-uncertain' };
+  });
+  await expect(
+    service.changeStock(store.state(), firstId, 'correct', '2.5'),
+  ).rejects.toMatchObject({ code: 'commit-uncertain' });
+  expect((await service.read()).records[0].stockBaseline?.quantity).toBe(2.5);
+  expect(store.mutate).toHaveBeenCalledTimes(2);
+});
+
+test('prescription unlink preserves baseline, additions, threshold and Health identity', async () => {
+  const store = medicationFixture();
+  const service = createMedicationService(
+    store,
+    jest.fn(async () => true),
+  );
+  let state = await service.saveDetails(
+    store.state(),
+    { displayName: 'Synthetic', prescriptionId },
+    firstId,
+  );
+  state = await service.changeStock(state, firstId, 'correct', '2.5');
+  state = await service.changeStock(state, firstId, 'add', '0.5');
+  const linked = {
+    ...state.records[0],
+    lowStockThreshold: 1.5,
+    healthKitLink: { conceptReference: 'synthetic' },
+    stockBaseline: {
+      ...state.records[0].stockBaseline!,
+      healthKitConceptReference: 'synthetic',
+    },
+  };
+  const healthStore = medicationFixture({ ...state, records: [linked] });
+  const healthService = createMedicationService(healthStore, jest.fn());
+  const unlinked = await healthService.unlinkPrescription(prescriptionId);
+  expect(unlinked.records[0]).toEqual({ ...linked, prescriptionId: null });
 });

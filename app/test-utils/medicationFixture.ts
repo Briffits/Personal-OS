@@ -1,3 +1,4 @@
+import { sumCounts } from '../src/medications/countArithmetic';
 import {
   MedicationError,
   type MedicationCollection,
@@ -8,22 +9,32 @@ export const firstId = '11111111-1111-4111-8111-111111111111';
 export const secondId = '22222222-2222-4222-8222-222222222222';
 export const prescriptionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 export const otherPrescriptionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+export function stockFields(legacyRecordedStock: number | null) {
+  return {
+    stockUnit: 'count' as const,
+    stockBaseline: null,
+    stockAdditions: [],
+    legacyRecordedStock,
+    lowStockThreshold: null,
+    healthKitLink: null,
+  };
+}
 export function initialCollection(): MedicationCollection {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     revision: 0,
     pendingLegacy: null,
     records: [
       {
         id: firstId,
         displayName: 'Example one',
-        stock: 12,
+        ...stockFields(12),
         prescriptionId: null,
       },
       {
         id: secondId,
         displayName: 'Example two',
-        stock: null,
+        ...stockFields(null),
         prescriptionId: null,
       },
     ],
@@ -49,14 +60,19 @@ export function medicationFixture(initial = initialCollection()) {
             '0',
           )}-0000-4000-8000-000000000000`,
           displayName: command.displayName,
-          stock: null,
+          ...stockFields(null),
           prescriptionId: command.prescriptionId,
         });
       } else if (command.type === 'completeLegacy') {
         if (!pendingLegacy) {
           throw new MedicationError('not-found');
         }
-        records.push({ ...pendingLegacy, displayName: command.displayName });
+        records.push({
+          id: pendingLegacy.id,
+          prescriptionId: null,
+          ...stockFields(pendingLegacy.stock),
+          displayName: command.displayName,
+        });
         pendingLegacy = null;
       } else if (command.type === 'remove') {
         records = records.filter(record => record.id !== command.id);
@@ -67,17 +83,58 @@ export function medicationFixture(initial = initialCollection()) {
             : record,
         );
       } else {
-        records = records.map(record =>
-          record.id !== command.id
-            ? record
-            : command.type === 'edit'
-            ? {
-                ...record,
-                displayName: command.displayName,
-                prescriptionId: command.prescriptionId,
-              }
-            : { ...record, stock: command.stock },
-        );
+        records = records.map(record => {
+          if (record.id !== command.id) {
+            return record;
+          }
+          if (command.type === 'edit') {
+            return {
+              ...record,
+              displayName: command.displayName,
+              prescriptionId: command.prescriptionId,
+            };
+          }
+          const id = `${String(nextId++).padStart(
+            8,
+            '0',
+          )}-0000-4000-8000-000000000000`;
+          const recordedAt = '2026-01-01T00:00:00.000Z';
+          if (command.type === 'establishBaseline') {
+            return {
+              ...record,
+              legacyRecordedStock: null,
+              stockAdditions: [],
+              stockBaseline: {
+                id,
+                quantity: command.quantity,
+                recordedAt,
+                healthKitConceptReference:
+                  record.healthKitLink?.conceptReference ?? null,
+              },
+            };
+          }
+          if (!record.stockBaseline) {
+            return {
+              ...record,
+              legacyRecordedStock: sumCounts([
+                record.legacyRecordedStock!,
+                command.quantity,
+              ]),
+            };
+          }
+          return {
+            ...record,
+            stockAdditions: [
+              ...record.stockAdditions,
+              {
+                id,
+                baselineId: record.stockBaseline.id,
+                quantity: command.quantity,
+                recordedAt,
+              },
+            ],
+          };
+        });
       }
       state = { ...state, revision: revision + 1, records, pendingLegacy };
       return state;
