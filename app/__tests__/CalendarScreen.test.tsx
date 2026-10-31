@@ -84,6 +84,14 @@ function buttons() {
   );
 }
 
+function gapRows() {
+  return screen.root
+    .findAllByType(RN.View)
+    .filter(node =>
+      node.props.accessibilityLabel?.startsWith('Calendar gap, '),
+    );
+}
+
 test('missing bridge shows unavailable in this build, without mock content or permission button', async () => {
   delete RN.NativeModules.CalendarEvents;
   await mount();
@@ -109,7 +117,7 @@ test.each(['notDetermined', 'writeOnly'])(
       expect(content()).toContain(
         'Calendar access currently allows adding events only',
       );
-      expect(content()).not.toContain('No events today');
+      expect(content()).not.toContain('No events were returned');
     }
     await press('Allow Calendar access');
     expect(module.requestAccess).toHaveBeenCalledTimes(1);
@@ -126,7 +134,7 @@ test.each(['denied', 'writeOnly', 'restricted'])(
     await mount();
     await press('Allow Calendar access');
     expect(module.fetchToday).not.toHaveBeenCalled();
-    expect(content()).not.toContain('No events today');
+    expect(content()).not.toContain('No events were returned');
     expect(content()).not.toContain('Example');
     expect(content()).not.toContain('Unable to load events');
   },
@@ -161,7 +169,7 @@ test.each([
   await press('Refresh events');
   expect(content()).toContain(message);
   expect(content()).not.toContain('Example');
-  expect(content()).not.toContain('No events today');
+  expect(content()).not.toContain('No events were returned');
   expect(module.requestAccess).not.toHaveBeenCalled();
 });
 
@@ -190,7 +198,8 @@ test('formats display-zone same-day endpoints in the snapshot zone, preserves ro
     .filter(
       node =>
         node.props.accessible === true &&
-        node.props.accessibilityRole !== 'button',
+        node.props.accessibilityRole !== 'button' &&
+        !node.props.accessibilityLabel?.startsWith('Calendar gap, '),
     );
   expect(rows.map(row => row.props.accessibilityLabel)).toEqual([
     `Untitled event, ${date.format(
@@ -240,6 +249,7 @@ test('future snapshot fails closed without scheduling an automatic retry', async
   await mount();
   expect(content()).toContain('Unable to load events');
   expect(content()).not.toContain('Example');
+  expect(gapRows()).toHaveLength(0);
   await act(async () => jest.advanceTimersByTime(60_000));
   expect(module.fetchToday).toHaveBeenCalledTimes(1);
 });
@@ -361,7 +371,7 @@ test('authorized empty is distinct from failure and retry rechecks authorization
     events: [],
   });
   await press('Retry');
-  expect(content()).toContain('No events today.');
+  expect(content()).toContain('No events were returned for today.');
   expect(module.getAuthorizationStatus).toHaveBeenCalledTimes(2);
   expect(module.requestAccess).not.toHaveBeenCalled();
 });
@@ -426,6 +436,7 @@ test('foreground events coalesce behind a pending fetch and cannot restore stale
   expect(module.fetchToday).toHaveBeenCalledTimes(1);
   expect(content()).not.toContain('Example');
   expect(content()).toContain('Calendar access is off');
+  expect(gapRows()).toHaveLength(0);
   expect(module.requestAccess).not.toHaveBeenCalled();
 });
 
@@ -439,6 +450,7 @@ test('pending authorization status does not start a stale fetch on foreground re
   await act(async () => pending.resolve('authorized'));
   expect(module.fetchToday).not.toHaveBeenCalled();
   expect(content()).toContain('Calendar access is restricted');
+  expect(gapRows()).toHaveLength(0);
 });
 
 test.each(['denied', 'restricted'])(
@@ -601,3 +613,301 @@ test.each([
     }
   },
 );
+
+test.each(['empty', 'all-day-only'])(
+  '%s successful read shows a qualified gap with advisory/coverage wording',
+  async kind => {
+    const fixture = calendarFixture();
+    module.fetchToday.mockResolvedValue({
+      ...fixture,
+      events: kind === 'empty' ? [] : [fixture.events[0]],
+    });
+    await mount();
+    expect(gapRows()).toHaveLength(1);
+    expect(gapRows()[0].props.accessibilityLabel).toContain(
+      '720 elapsed minutes',
+    );
+    expect(content()).toContain('Remaining today: now–midnight');
+    expect(content()).toContain('not confirmed availability');
+    expect(content()).toContain('All-day entries are not subtracted');
+    expect(content()).toContain('Inaccessible calendars');
+    expect(content()).toContain('Calendar last read:');
+    expect(content()).not.toContain('free all day');
+    if (kind === 'all-day-only') {
+      expect(content()).toContain('Example all-day event');
+      expect(content()).not.toContain('No events were returned');
+    } else {
+      expect(content()).toContain('No events were returned for today.');
+    }
+    expect(module.requestAccess).not.toHaveBeenCalled();
+  },
+);
+
+test.each([
+  'notDetermined',
+  'writeOnly',
+  'denied',
+  'restricted',
+  'unavailable',
+])(
+  'gaps never appear with %s access, including after a refresh',
+  async status => {
+    module.getAuthorizationStatus.mockResolvedValue(status);
+    await mount();
+    expect(gapRows()).toHaveLength(0);
+    expect(content()).not.toContain('Calendar gaps today');
+    expect(content()).not.toContain('No gaps of 15 minutes');
+    if (status !== 'unavailable') {
+      await press('Refresh events');
+    }
+    expect(gapRows()).toHaveLength(0);
+    expect(module.fetchToday).not.toHaveBeenCalled();
+    expect(module.requestAccess).not.toHaveBeenCalled();
+  },
+);
+
+test('permission request, loading and malformed reads never expose gaps', async () => {
+  module.getAuthorizationStatus.mockResolvedValue('notDetermined');
+  const access = deferred<string>();
+  module.requestAccess.mockReturnValueOnce(access.promise);
+  await mount();
+  await press('Allow Calendar access');
+  expect(content()).toContain('Waiting for Calendar access');
+  expect(gapRows()).toHaveLength(0);
+  const read = deferred<ReturnType<typeof calendarFixture>>();
+  module.fetchToday.mockReturnValueOnce(read.promise);
+  await act(async () => access.resolve('authorized'));
+  expect(content()).toContain('Loading events');
+  expect(content()).not.toContain('Calendar gaps today');
+  const fixture = calendarFixture();
+  await act(async () =>
+    read.resolve({
+      ...fixture,
+      events: [...fixture.events, fixture.events[0]],
+    }),
+  );
+  expect(content()).toContain('Unable to load events');
+  expect(gapRows()).toHaveLength(0);
+  expect(content()).not.toContain('No gaps of 15 minutes');
+});
+
+test.each([
+  'read-failed',
+  'busy',
+  'denied',
+  'restricted',
+  'write-only',
+  'unavailable',
+])(
+  'refresh clears gaps and their clock before %s failure; retry cannot restore old rows',
+  async code => {
+    await mount();
+    expect(gapRows()).toHaveLength(1);
+    const pending = deferred<ReturnType<typeof calendarFixture>>();
+    module.fetchToday.mockReturnValueOnce(pending.promise);
+    await press('Refresh events');
+    expect(gapRows()).toHaveLength(0);
+    expect(content()).not.toContain('Calendar last read:');
+    await act(async () => pending.reject({ code }));
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(gapRows()).toHaveLength(0);
+    expect(module.fetchToday).toHaveBeenCalledTimes(2);
+    expect(module.requestAccess).not.toHaveBeenCalled();
+  },
+);
+
+test('minute updates shrink only gaps, preserve read time and row identity, and never poll Calendar', async () => {
+  await mount();
+  const row = gapRows()[0];
+  const readText = () =>
+    screen.root
+      .findAllByType(RN.Text)
+      .find(
+        node =>
+          Array.isArray(node.props.children) &&
+          node.props.children[0] === 'Calendar last read: ',
+      )?.props.children;
+  const readAt = readText();
+  expect(readAt).toBeDefined();
+  await act(async () => jest.advanceTimersByTime(60_000));
+  expect(gapRows()[0]).toBe(row);
+  expect(gapRows()[0].props.accessibilityLabel).toContain(
+    '719 elapsed minutes',
+  );
+  expect(readText()).toEqual(readAt);
+  expect(module.getAuthorizationStatus).toHaveBeenCalledTimes(1);
+  expect(module.fetchToday).toHaveBeenCalledTimes(1);
+  expect(module.requestAccess).not.toHaveBeenCalled();
+});
+
+test('a shrinking gap disappears one millisecond below 15 minutes, between minute ticks', async () => {
+  const fixture = calendarFixture();
+  module.fetchToday.mockResolvedValue({
+    ...fixture,
+    events: [
+      {
+        ...fixture.events[2],
+        time: {
+          kind: 'timed',
+          startsAt: calendarNow + 15 * 60_000 + 25_000,
+          endsAt: fixture.day.endsAt,
+        },
+      },
+    ],
+  });
+  await mount();
+  expect(gapRows()).toHaveLength(1);
+  await act(async () => jest.advanceTimersByTime(25_000));
+  expect(gapRows()).toHaveLength(1);
+  await act(async () => jest.advanceTimersByTime(1));
+  expect(gapRows()).toHaveLength(0);
+  expect(content()).toContain(
+    'No gaps of 15 minutes or more under these rules.',
+  );
+  expect(module.fetchToday).toHaveBeenCalledTimes(1);
+});
+
+test('an event end between minute ticks changes the next gap to Now without a fetch', async () => {
+  const fixture = calendarFixture();
+  module.fetchToday.mockResolvedValue({
+    ...fixture,
+    events: [
+      {
+        ...fixture.events[2],
+        time: {
+          kind: 'timed',
+          startsAt: calendarNow,
+          endsAt: calendarNow + 30_500,
+        },
+      },
+    ],
+  });
+  await mount();
+  expect(gapRows()[0].props.accessibilityLabel).not.toContain('from Now');
+  await act(async () => jest.advanceTimersByTime(30_500));
+  expect(gapRows()[0].props.accessibilityLabel).toContain('from Now');
+  expect(module.fetchToday).toHaveBeenCalledTimes(1);
+});
+
+test.each(['inactive', 'background'] as const)(
+  '%s clears gaps and timers; foreground rechecks permission before exposing new gaps',
+  async state => {
+    const timers = jest.spyOn(globalThis, 'setTimeout');
+    const cleared = jest.spyOn(globalThis, 'clearTimeout');
+    await mount();
+    expect(gapRows()).toHaveLength(1);
+    await appState(state);
+    expect(gapRows()).toHaveLength(0);
+    for (const delay of [60_000, calendarFixture().day.endsAt - calendarNow]) {
+      const index = timers.mock.calls.findIndex(([, ms]) => ms === delay);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(cleared).toHaveBeenCalledWith(timers.mock.results[index].value);
+    }
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(module.fetchToday).toHaveBeenCalledTimes(1);
+    module.getAuthorizationStatus.mockResolvedValue('denied');
+    await appState('active');
+    expect(gapRows()).toHaveLength(0);
+    expect(content()).toContain('Calendar access is off');
+    expect(module.fetchToday).toHaveBeenCalledTimes(1);
+  },
+);
+
+test('late background results cannot publish gaps; a fresh foreground result can', async () => {
+  const stale = deferred<ReturnType<typeof calendarFixture>>();
+  module.fetchToday.mockReturnValueOnce(stale.promise);
+  await mount();
+  await appState('background');
+  await appState('active');
+  const fresh = deferred<ReturnType<typeof calendarFixture>>();
+  module.fetchToday.mockReturnValueOnce(fresh.promise);
+  await act(async () => stale.resolve(calendarFixture()));
+  expect(gapRows()).toHaveLength(0);
+  expect(content()).toContain('Loading events');
+  await act(async () => fresh.resolve(calendarFixture()));
+  expect(gapRows()).toHaveLength(1);
+  expect(module.fetchToday).toHaveBeenCalledTimes(2);
+  expect(module.requestAccess).not.toHaveBeenCalled();
+});
+
+test('unmount cancels the gap clock as well as rollover; denied re-entry has no old gaps', async () => {
+  const timers = jest.spyOn(globalThis, 'setTimeout');
+  const cleared = jest.spyOn(globalThis, 'clearTimeout');
+  await mount();
+  await act(async () => screen.unmount());
+  for (const delay of [60_000, calendarFixture().day.endsAt - calendarNow]) {
+    const index = timers.mock.calls.findIndex(([, ms]) => ms === delay);
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(cleared).toHaveBeenCalledWith(timers.mock.results[index].value);
+  }
+  await act(async () => jest.advanceTimersByTime(60_000));
+  expect(module.fetchToday).toHaveBeenCalledTimes(1);
+  module.getAuthorizationStatus.mockResolvedValue('denied');
+  await mount();
+  expect(gapRows()).toHaveLength(0);
+});
+
+test.each([-13 * 60 * 60_000, 13 * 60 * 60_000])(
+  'a system clock jump outside the snapshot day (%s ms) hides gaps on the next tick',
+  async jump => {
+    await mount();
+    jest.setSystemTime(calendarNow + jump);
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(gapRows()).toHaveLength(0);
+    expect(content()).toContain('Calendar gaps need a fresh read');
+    expect(module.fetchToday).toHaveBeenCalledTimes(1);
+    await act(async () => jest.advanceTimersByTime(60_000));
+    expect(module.fetchToday).toHaveBeenCalledTimes(1);
+  },
+);
+
+test('local midnight clears old gaps and uses the next snapshot day/zone on completion', async () => {
+  const old = calendarFixture();
+  jest.setSystemTime(old.day.endsAt - 15 * 60_000);
+  module.fetchToday.mockResolvedValueOnce({ ...old, events: [] });
+  await mount();
+  expect(gapRows()).toHaveLength(1);
+  const nextRead = deferred<ReturnType<typeof calendarFixture>>();
+  module.fetchToday.mockReturnValueOnce(nextRead.promise);
+  await act(async () => jest.advanceTimersByTime(15 * 60_000));
+  expect(gapRows()).toHaveLength(0);
+  expect(content()).not.toContain('Calendar last read:');
+  expect(content()).toContain('Loading events');
+  await act(async () =>
+    nextRead.resolve({
+      day: {
+        date: '2026-10-30',
+        timeZone: 'Asia/Tokyo',
+        startsAt: Date.UTC(2026, 9, 29, 15),
+        endsAt: Date.UTC(2026, 9, 30, 15),
+      },
+      events: [],
+    }),
+  );
+  expect(gapRows()).toHaveLength(1);
+  expect(gapRows()[0].props.accessibilityLabel).toContain(
+    '900 elapsed minutes',
+  );
+  expect(content()).toContain('Asia/Tokyo');
+  expect(module.fetchToday).toHaveBeenCalledTimes(2);
+  expect(module.requestAccess).not.toHaveBeenCalled();
+});
+
+test('gap announcements are grouped, explicit and not live regions or extra actions', async () => {
+  await mount();
+  const row = gapRows()[0];
+  expect(row.props.accessible).toBe(true);
+  expect(row.props.accessibilityLabel).toContain('from Now to');
+  expect(row.props.accessibilityLabel).toContain('elapsed minutes');
+  expect(row.props.accessibilityLiveRegion).toBeUndefined();
+  for (const text of row.findAllByType(RN.Text)) {
+    expect(text.props.accessibilityLabel).toBeUndefined();
+    expect(text.props.accessibilityLiveRegion).toBeUndefined();
+    expect(text.props.allowFontScaling).not.toBe(false);
+    expect(text.props.numberOfLines).toBeUndefined();
+  }
+  expect(buttons().map(node => node.props.accessibilityLabel)).toEqual([
+    'Back to Today',
+    'Refresh events',
+  ]);
+});

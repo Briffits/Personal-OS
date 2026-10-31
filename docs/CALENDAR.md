@@ -10,6 +10,149 @@ Later sections record synthetic EventKit evidence and user-confirmed build-4
 device observations; their limits and the untested presentation follow-up are
 recorded separately.
 
+## Calendar gaps today — bounded TypeScript slice
+
+Base: Calendar merge `56f181250c2c675f55ab496861c6848557e49f92`.
+The user authorized this implementation after accepting the rules below. It adds
+a read-only section inside the existing Calendar screen, using the same snapshot
+as the event list. No new Today navigation/read, native code, wire fields,
+permissions, dependencies, storage, network calls or background work are added.
+The previous event-view implementation and validation history below remain intact.
+The user's production startup, explicit permission and event-loading observations
+are accepted as completed evidence; Calendar and Health diagnostics are not reopened.
+
+### Agreed product rules
+
+- The window is **remaining today: now–midnight**, visibly labelled with the
+  snapshot's time zone. Use the native next-local-day boundary, including DST;
+  do not add 24 hours or introduce working-hours assumptions/settings.
+- All returned timed events with positive duration block time, clipped to the
+  remaining-day window. Overlapping, nested, identical and adjacent intervals
+  form one blocking union. Earlier time is excluded. Point events remain listed
+  but reserve no duration; no travel/preparation buffers are invented.
+- **All-day events are advisory.** They remain in the original event list and do
+  not subtract time, including multi-day all-day spans. The section explicitly
+  says they may still represent commitments and should be checked.
+- Keep gaps of **at least 15 elapsed minutes**, inclusive, using milliseconds
+  rather than wall-clock subtraction or rounded display values.
+- Preserve existing native cancellation filtering. The current contract exposes
+  no availability, invitation response, tentative status or source selection.
+  Free/declined/tentative/unknown returned timed entries therefore receive the
+  same rule. Do not infer statuses or decode the opaque occurrence ID.
+- These are **calendar gaps, not confirmed availability**. The explanation covers
+  inaccessible calendars, unsynced changes and commitments outside Calendar.
+  An authorized empty read says “No events were returned for today.” An all-day-only
+  or empty result can yield a qualifying remaining-day gap, with the same caveats.
+  No qualifying result says “No gaps of 15 minutes or more under these rules.”
+
+### Implementation and lifecycle
+
+`calculateCalendarGaps(snapshot, now)` is a pure function over an adapter-validated
+snapshot and explicit clock input. It copies/clips timed intervals, sorts that
+copy, and advances a cursor over their union to derive chronological gaps. It does
+not mutate source rows, use event titles/identity, resolve civil dates, reconstruct
+recurrence or repeat native membership decisions. Invalid numeric bounds, reversed
+timed intervals and a current instant outside the snapshot day fail closed.
+Wire validation, including duplicate IDs and invalid all-day dates, remains in
+the unchanged native adapter.
+
+`CalendarScreen → CalendarGaps → useCalendarGaps → calculateCalendarGaps` is the
+derived-display path. `CalendarGaps` mounts only while `useCalendar` is ready;
+all existing loading, error, permission, background and obsolete-result safeguards
+therefore also govern gap visibility. The only `useCalendar` change records the
+successful read-completion instant in memory and uses that same instant for its
+existing day-freshness check. It is not a provider sync timestamp.
+
+The gap hook has one local timeout: the earliest next minute, timed endpoint,
+minimum-duration crossing or native day end. Exactly 15 minutes still qualifies;
+a shrinking gap is removed one millisecond below that threshold. Timeouts only
+recalculate from the same snapshot; they never request access or fetch events.
+Unmount/refresh/inactivity cancels the gap timeout. The existing `useCalendar`
+timer still owns midnight refresh, with entry, manual refresh and foreground return
+unchanged. Old gaps/read timestamps disappear during refresh or failure. A clock
+jump outside the snapshot day hides gaps on the next tick and offers the existing
+Refresh events action, without starting an automatic retry loop.
+
+Displayed gaps are accurate at each calculation, not continuously refreshed live
+availability. Durations update at least each minute while visible; start labels
+use “Now” for an ongoing gap. Interval endpoints retain seconds/milliseconds when
+needed rather than rounding into an event. Dates make the next-midnight end clear;
+explicit UTC offsets distinguish repeated wall-clock times on DST fallback.
+Duration labels round down to whole minutes and say “At least … minutes.”
+Gap row keys use their stable end instant so ordinary clock ticks do not remount
+rows. Spoken labels group each range/duration with explicit “from … to …”; no
+live-region clock announcements or focus requests are added. Text remains
+uncapped and scrollable, using existing semantic colours and typography.
+
+No event-change subscription, native polling, provider freshness/completeness
+signal, immediate foreground time-zone observer or persisted cache is added.
+Continuously foregrounded time-zone changes still take effect on the next existing
+refresh; labels consistently use the captured snapshot zone. Existing EventKit
+silent-empty-array and timeout/non-cancellation limitations remain. Offline local
+Calendar reads can support gaps, but neither a successful read nor the displayed
+read time establishes that account synchronization is current.
+
+### Acceptance and validation
+
+Synthetic calculation tests cover empty/all-day-only/mixed inputs; past, ongoing,
+overnight and multi-day clipping; exact midnight and point endpoints; unordered,
+nested, overlapping, adjacent and identical intervals; multiple gaps; exact
+15-minute thresholds including sub-minute precision; invalid numeric input and
+immutability. Explicit local-day fixtures cover 23/25-hour DST days, 23.5/24.5-hour
+Lord Howe days, a non-hour-offset zone, UTC/local-date disagreement and 15 elapsed
+minutes across forward/backward offset changes. Formatter tests distinguish
+repeated local times, next-date midnight ends and precise endpoints.
+
+Screen tests cover advisory/coverage copy, empty versus failed reads, missing or
+insufficient permission, permission requests, malformed responses, refresh errors,
+foreground/background transitions, stale in-flight responses, unmount/re-entry,
+minute/endpoint/threshold updates without extra native calls, timer cleanup, clock
+jumps and midnight refresh to a new day/zone. Existing access/coalescing/late-result,
+navigation, native-adapter and event-formatting regressions remain applicable.
+Renderer checks cover grouping, uncapped text, scrolling, existing minimum touch
+targets and light/dark large-text configuration; they do not certify physical iOS
+layout, speech or focus behaviour.
+
+VPS validation (2026-10-31):
+
+- `tsc --noEmit` — passed.
+- `npm run lint -- --max-warnings=0` — passed.
+- Focused calculation/formatting/Calendar-screen Jest run — **3 suites / 105
+  tests passed**.
+- Full `npm test -- --runInBand --watchman=false` — **22 suites / 622 tests
+  passed**, including Calendar adapter, existing event formatting, App navigation,
+  Reminders and Medication/Prescriptions/Health screen regressions. These are
+  synthetic JavaScript tests, not new Health or Calendar device diagnostics.
+- Changed-file Prettier and `git diff --check` — passed.
+- Native sources, Calendar wire contract/adapter and dependency manifests are
+  unchanged. Existing installed dependencies were reused; no package install.
+
+At the initial VPS implementation checkpoint, work was uncommitted in the isolated
+`/tmp/personalos-calendar-gaps-vps` checkout on `feat/calendar-gaps-today`. That
+checkpoint included no commit, push, merge, app installation or personal-data
+access. The original working tree, branches, worktrees and existing changes were
+preserved. The subsequent user-authorized review and draft-PR publication are a
+separate step; neither authorizes merge or production installation.
+
+Review before publication (2026-10-31): the complete ten-file feature/test/docs
+diff was checked against the approved policy, adapter contract, refresh lifecycle
+and design tokens. No blocking implementation finding was identified. Only the
+checkpoint wording above was clarified; implementation and test contents are
+unchanged from the 622-test full run, which is reused. TypeScript, zero-warning
+ESLint and the affected six Jest suites (**199 tests**, including Calendar adapter,
+existing formatter and App navigation) passed again. Formatting/whitespace and
+the exact staged scope are checked before the authorized commit. Native sources,
+dependencies, persistence, logging and permission behaviour remain unchanged.
+
+Outstanding Mac/iPhone work is limited to building the changed JavaScript and
+checking the **new gap presentation** with synthetic data: normal and largest
+Dynamic Type on a small screen, both appearances, VoiceOver reading order/grouping,
+no repeated timer announcements or focus loss, midnight/date/offset wording,
+and minute/foreground/manual-refresh behaviour. Verify the installed Intl runtime's
+offset/fractional-second formatting. Node/Jest results do not establish Hermes/iOS
+rendering or live DST transitions. No native change, installation, personal-data
+read or device validation is claimed by this VPS slice.
+
 ## Contract: NativeModules.CalendarEvents
 
 Expose exactly three parameterless promise methods, with no event subscription,
@@ -231,10 +374,11 @@ and [event identifier limitations](https://developer.apple.com/documentation/eve
 
 ## Roadmap reconciliation and exclusions
 
-This is only milestone 5's event-view slice. Available-time calculation remains
-separate, as do conflict detection, scheduling, priority ranking, Help Me Start,
-daily briefing, background work and richer Calendar features. No Calendar writes
-or new persistence are authorized.
+Milestone 5 now includes the event-view slice and the separately authorized,
+bounded Calendar gaps calculation described above. Conflict detection, scheduling,
+priority ranking, Help Me Start, daily briefing, background work and richer
+Calendar features remain separate. No Calendar writes or new persistence are
+authorized. This slice does not require the priority engine, Health, Gmail or a backend.
 
 **Gmail remains in the agreed 1.0 scope unless explicitly changed.** This user
 clarification conflicts with the overview's final development-plan paragraph,
