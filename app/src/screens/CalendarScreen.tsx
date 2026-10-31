@@ -21,6 +21,7 @@ import {
 import { NativeCalendar } from '../native/NativeCalendar';
 import { createCalendarTimeFormatter } from '../calendar/formatCalendarEventTime';
 import { useCalendar } from '../calendar/useCalendar';
+import CalendarGaps from '../components/CalendarGaps';
 
 const messages = {
   loading: 'Loading events…',
@@ -110,13 +111,16 @@ export default function CalendarScreen({ onBack }: { onBack: () => void }) {
         >
           View today’s events here. Make changes in Apple Calendar.
         </Text>
+        {state.kind === 'ready' && (
+          <CalendarGaps snapshot={state.snapshot} readAt={state.readAt} />
+        )}
         {state.kind === 'ready' ? (
           state.snapshot.events.length === 0 ? (
             <AppCard>
               <Text
                 style={[typography.body, { color: theme.colours.textPrimary }]}
               >
-                No events today.
+                No events were returned for today.
               </Text>
             </AppCard>
           ) : (

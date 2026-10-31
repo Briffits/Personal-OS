@@ -10,7 +10,7 @@ import {
 export type CalendarState =
   | { kind: 'loading' | 'requesting' | 'error' }
   | { kind: Exclude<CalendarAuthorization, 'authorized'> }
-  | { kind: 'ready'; snapshot: CalendarSnapshot };
+  | { kind: 'ready'; snapshot: CalendarSnapshot; readAt: number };
 
 function failure(error: unknown): CalendarState {
   if (error instanceof CalendarError) {
@@ -83,12 +83,13 @@ export function useCalendar(service: CalendarService) {
         }
         // Freshness only, never event membership: the native reader supplies
         // the next local-day boundary (including DST). Fail closed if expired.
-        const delay = snapshot.day.endsAt - Date.now();
-        if (delay <= 0 || snapshot.day.startsAt > Date.now()) {
+        const readAt = Date.now();
+        const delay = snapshot.day.endsAt - readAt;
+        if (delay <= 0 || snapshot.day.startsAt > readAt) {
           publish({ kind: 'error' });
           return;
         }
-        publish({ kind: 'ready', snapshot });
+        publish({ kind: 'ready', snapshot, readAt });
         timer = setTimeout(refresh, Math.min(delay, 2_147_483_647));
       } catch (error) {
         if (isCurrent()) {
