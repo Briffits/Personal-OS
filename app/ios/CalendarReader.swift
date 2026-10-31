@@ -134,8 +134,21 @@ enum CalendarProjection {
       let endMS = try CalendarDay.milliseconds(end)
       let time: CalendarEventTime
       if input.allDay {
+        guard end > start else { throw CalendarFailure.readFailed }
+        // Represent the civil days intersected by the raw positive interval.
+        // EventKit can return all-day ends within their final day. Keep an
+        // already-exclusive boundary; otherwise ceil to that day's end using
+        // calendar arithmetic, never a fixed duration or an unconditional day.
+        let exclusiveEnd: Date
+        if end == day.calendar.startOfDay(for: end) {
+          exclusiveEnd = end
+        } else {
+          guard let finalDay = day.calendar.dateInterval(of: .day, for: end),
+                finalDay.end > end else { throw CalendarFailure.readFailed }
+          exclusiveEnd = finalDay.end
+        }
         let first = try CalendarDay.civilDate(start, calendar: day.calendar)
-        let after = try CalendarDay.civilDate(end, calendar: day.calendar)
+        let after = try CalendarDay.civilDate(exclusiveEnd, calendar: day.calendar)
         guard first < after else { throw CalendarFailure.readFailed }
         guard first <= day.date && day.date < after else { continue }
         time = .allDay(first, after)

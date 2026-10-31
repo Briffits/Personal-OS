@@ -165,7 +165,7 @@ test.each([
   expect(module.requestAccess).not.toHaveBeenCalled();
 });
 
-test('formats original overnight endpoints in the snapshot zone, preserves row order and missing-title fallback', async () => {
+test('formats display-zone same-day endpoints in the snapshot zone, preserves row order and missing-title fallback', async () => {
   const fixture = calendarFixture();
   const zone = 'Asia/Tokyo';
   module.fetchToday.mockResolvedValue({
@@ -174,10 +174,13 @@ test('formats original overnight endpoints in the snapshot zone, preserves row o
     events: [{ ...fixture.events[1], title: '   ' }, fixture.events[0]],
   });
   await mount();
-  const formatter = new Intl.DateTimeFormat(undefined, {
+  const date = new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+    timeZone: zone,
+  });
+  const formatter = new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: zone,
@@ -190,11 +193,24 @@ test('formats original overnight endpoints in the snapshot zone, preserves row o
         node.props.accessibilityRole !== 'button',
     );
   expect(rows.map(row => row.props.accessibilityLabel)).toEqual([
-    `Untitled event, ${formatter.format(
+    `Untitled event, ${date.format(
       Date.UTC(2026, 9, 28, 23),
-    )} – ${formatter.format(Date.UTC(2026, 9, 29, 1))}`,
+    )}, from ${formatter.format(
+      Date.UTC(2026, 9, 28, 23),
+    )} to ${formatter.format(Date.UTC(2026, 9, 29, 1))}`,
     'Example all-day event, All day',
   ]);
+  for (const row of rows) {
+    for (const child of row.findAllByType(RN.Text)) {
+      expect(child.props.accessibilityLabel).toBeUndefined();
+      expect(child.props.accessible).not.toBe(true);
+    }
+  }
+  expect(rows[0].findAllByType(RN.Text)[1].props.children).toBe(
+    `${date.format(Date.UTC(2026, 9, 28, 23))}, ${formatter.format(
+      Date.UTC(2026, 9, 28, 23),
+    )} – ${formatter.format(Date.UTC(2026, 9, 29, 1))}`,
+  );
 });
 
 test.each([23, 25])(
@@ -278,9 +294,6 @@ test('shows loading until an authorized read completes, with read-only rows incl
   expect(content()).toContain('All day');
   expect(content()).toContain(
     new Intl.DateTimeFormat(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
       timeZone: 'UTC',
@@ -559,17 +572,22 @@ test('unmount during a permission request cannot fetch or replay permission late
   expect(module.requestAccess).toHaveBeenCalledTimes(1);
 });
 
-test.each(['light', 'dark'] as const)(
-  'retains readable controls and scalable text at large text sizes in %s appearance',
-  async appearance => {
+test.each([
+  ['light', 'notDetermined'],
+  ['dark', 'notDetermined'],
+  ['light', 'authorized'],
+  ['dark', 'authorized'],
+] as const)(
+  'retains scrollable scalable content at large text sizes in %s appearance with %s access',
+  async (appearance, authorization) => {
     jest.spyOn(RN, 'useColorScheme').mockReturnValue(appearance);
     jest
       .spyOn(RN, 'useWindowDimensions')
       .mockReturnValue({ width: 320, height: 568, scale: 2, fontScale: 3.571 });
-    module.getAuthorizationStatus.mockResolvedValue('notDetermined');
+    module.getAuthorizationStatus.mockResolvedValue(authorization);
     await mount();
     expect(screen.root.findAllByType(RN.ScrollView)).toHaveLength(1);
-    expect(buttons()).toHaveLength(3);
+    expect(buttons()).toHaveLength(authorization === 'authorized' ? 2 : 3);
     for (const button of buttons()) {
       expect(button.props.accessibilityRole).toBe('button');
       const style = RN.StyleSheet.flatten(button.props.style);

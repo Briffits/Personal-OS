@@ -19,6 +19,7 @@ import {
   usePersonalOSTheme,
 } from '../design-system';
 import { NativeCalendar } from '../native/NativeCalendar';
+import { createCalendarTimeFormatter } from '../calendar/formatCalendarEventTime';
 import { useCalendar } from '../calendar/useCalendar';
 
 const messages = {
@@ -70,14 +71,9 @@ export default function CalendarScreen({ onBack }: { onBack: () => void }) {
   const busy = state.kind === 'loading' || state.kind === 'requesting';
   const heading =
     fontScale >= 1.786 ? typography.cardTitle : typography.screenTitle;
-  const timeFormatter = new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: state.kind === 'ready' ? state.snapshot.day.timeZone : 'UTC',
-  });
+  const formatTime = createCalendarTimeFormatter(
+    state.kind === 'ready' ? state.snapshot.day.timeZone : 'UTC',
+  );
 
   async function openSettings() {
     setSettingsFailed(false);
@@ -136,18 +132,13 @@ export default function CalendarScreen({ onBack }: { onBack: () => void }) {
               </Text>
               {state.snapshot.events.map(event => {
                 // Display only: native owns all membership and ordering decisions.
-                const timeLabel =
-                  event.time.kind === 'all-day'
-                    ? 'All day'
-                    : `${timeFormatter.format(
-                        event.time.startsAt,
-                      )} – ${timeFormatter.format(event.time.endsAt)}`;
+                const timeLabel = formatTime(event.time);
                 const title = event.title.trim() || 'Untitled event';
                 return (
                   <AppCard key={event.occurrenceId} style={styles.card}>
                     <View
                       accessible
-                      accessibilityLabel={`${title}, ${timeLabel}`}
+                      accessibilityLabel={`${title}, ${timeLabel.spoken}`}
                     >
                       <Text
                         style={[
@@ -164,7 +155,7 @@ export default function CalendarScreen({ onBack }: { onBack: () => void }) {
                           { color: theme.colours.textSecondaryOnSurface },
                         ]}
                       >
-                        {timeLabel}
+                        {timeLabel.visible}
                       </Text>
                     </View>
                   </AppCard>

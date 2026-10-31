@@ -110,6 +110,64 @@ enum CalendarTests {
     fails("invalid native date") { _ = try CalendarDay.milliseconds(Date(timeIntervalSince1970: .nan)) }
     fails("outside JS date range") { _ = try CalendarDay.milliseconds(Date(timeIntervalSince1970: 9e12)) }
     fails("outside civil year range") { _ = try CalendarDay.civilDate(Date(timeIntervalSince1970: 3e11), calendar: today.calendar) }
+    // Positive all-day raw intervals cover exactly the intersected civil days.
+    // Values are wholly synthetic, not inferred from diagnostic endpoint labels.
+    for (zone, instant) in [
+      ("UTC", "2026-10-29T12:00:00Z"),
+      ("Europe/Malta", "2026-03-29T12:00:00Z"), ("Europe/Malta", "2026-10-25T12:00:00Z"),
+      ("America/New_York", "2026-03-08T12:00:00Z"), ("America/New_York", "2026-11-01T12:00:00Z"),
+      ("Australia/Lord_Howe", "2026-10-04T12:00:00Z"), ("Australia/Lord_Howe", "2026-04-05T12:00:00Z"),
+      ("America/Sao_Paulo", "2018-11-04T12:00:00Z"), ("Pacific/Apia", "2011-12-29T12:00:00Z"),
+      ("Asia/Kathmandu", "2026-10-29T12:00:00Z")
+    ] {
+      let local = try day(instant, zone), calendar = local.calendar
+      let later = calendar.dateInterval(of: .day, for: local.end)!.end
+      let spans = [(local.start, local.start.addingTimeInterval(1)),
+        (local.start, local.end.addingTimeInterval(-1)), (local.start, local.end),
+        (local.start, local.end.addingTimeInterval(1)), (local.start, later),
+        (local.start.addingTimeInterval(1), local.end.addingTimeInterval(-1)),
+        (local.start, later.addingTimeInterval(-1))]
+      for (start, end) in spans {
+        let value = CalendarEventInput(calendarID: "synthetic", eventID: "synthetic",
+          occurrence: nil, recurring: false, title: "Synthetic", start: start, end: end, allDay: true, canceled: false)
+        let projected = try CalendarProjection.rows([value], day: local)
+        let expectedEnd = try CalendarDay.civilDate(end <= local.end ? local.end : later, calendar: calendar)
+        check(projected.count == 1 && projected[0].time == .allDay(local.date, expectedEnd),
+              "positive same/multi-day span and exact boundary without extra day")
+        for offset in -1...3 {
+          let point = calendar.date(byAdding: .day, value: offset, to: local.start)!
+          let checkedDay = try CalendarDay(now: point, timeZone: local.timeZone)
+          let rawOverlap = start < checkedDay.end && end > checkedDay.start
+          let rows = try CalendarProjection.rows([value], day: checkedDay)
+          check(rows.count == (rawOverlap ? 1 : 0), "all-day civil membership equals raw half-open overlap")
+          if let row = rows.first { check(row.time == projected[0].time, "full span stable on each included day") }
+        }
+      }
+      for (start, end) in [(local.start, local.start),
+        (local.start.addingTimeInterval(1), local.start.addingTimeInterval(1)), (local.end, local.start)] {
+        let invalid = CalendarEventInput(calendarID: "synthetic", eventID: "invalid", occurrence: nil,
+          recurring: false, title: nil, start: start, end: end, allDay: true, canceled: false)
+        fails("zero or reversed all-day rejected before ceiling") { _ = try CalendarProjection.rows([invalid], day: local) }
+      }
+    }
+    let recurringAll = input("series", "2026-10-29T00:00:00Z", "2026-10-29T13:00:00Z", allDay: true,
+      recurring: true, occurrence: "2026-10-29T00:00:00Z")
+    let detachedAll = input("series", "2026-10-29T00:00:00Z", "2026-10-29T13:00:00Z", allDay: true,
+      recurring: true, occurrence: "2026-10-28T00:00:00Z")
+    let recurrenceRows = try CalendarProjection.rows([recurringAll, detachedAll], day: today)
+    check(recurrenceRows.count == 2 && recurrenceRows[0].id != recurrenceRows[1].id,
+          "normalized all-day occurrences retain separate raw original identity")
+    let extendedEnd = input("series", "2026-10-29T00:00:00Z", "2026-10-30T13:00:00Z", allDay: true,
+      recurring: true, occurrence: "2026-10-29T00:00:00Z")
+    check(try CalendarProjection.rows([recurringAll], day: today)[0].id == CalendarProjection.rows([extendedEnd], day: today)[0].id,
+          "exclusive-end conversion never changes occurrence identity")
+    check(try CalendarProjection.rows([recurringAll, recurringAll], day: today).count == 1, "identical normalized occurrence still deduplicated")
+    fails("different normalized spans for same occurrence still conflict") {
+      _ = try CalendarProjection.rows([recurringAll, extendedEnd], day: today)
+    }
+    let invalidAll = CalendarEventInput(calendarID: "synthetic", eventID: "invalid", occurrence: nil,
+      recurring: false, title: nil, start: today.start, end: Date(timeIntervalSince1970: .infinity), allDay: true, canceled: false)
+    fails("nonfinite all-day endpoint still rejected") { _ = try CalendarProjection.rows([invalidAll], day: today) }
     let canceled = input(nil, canceled: true)
     check(try CalendarProjection.rows([canceled], day: today).isEmpty, "canceled excluded")
     check(try CalendarProjection.rows([input(title: nil)], day: today)[0].title == "", "missing title")

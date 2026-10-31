@@ -6,7 +6,9 @@ and `app/src/calendar/calendar.ts` define the native contract before UI work.
 The VPS checkpoint implements TypeScript, navigation and synthetic tests. The Mac
 native slice described below now implements the bridge and has passed synthetic
 native tests, unsigned builds and no-permission Simulator navigation checks.
-EventKit event delivery and physical-device validation remain outstanding.
+Later sections record synthetic EventKit evidence and user-confirmed build-4
+device observations; their limits and the untested presentation follow-up are
+recorded separately.
 
 ## Contract: NativeModules.CalendarEvents
 
@@ -84,6 +86,13 @@ events only after an authorized successful query, never for denial/failure.
 4. All-day events use real Gregorian civil dates in the native reader's local
    calendar interpretation, with `endsBefore` exclusive and greater than `startsOn`.
    Preserve the full span. Include when `startsOn <= day.date < endsBefore`.
+   Require a strictly positive raw interval. Convert the start to its local civil
+   date. If the raw end is already a local day boundary, keep it unchanged;
+   otherwise use the end of its containing Gregorian day as the exclusive boundary.
+   This represents exactly the civil days intersected by the raw half-open interval.
+   Use Calendar arithmetic, not 86,400 seconds or an unconditional added day. This
+   is PersonalOS normalization policy, not a claim that Apple mandates a particular
+   endpoint representation. Zero, reversed and invalid intervals remain failures.
    Extract civil dates natively in the captured local zone; never serialize an
    all-day date as UTC midnight and shift it in JavaScript. Validate actual EventKit
    all-day and floating-time delivery on Mac/device, especially across zones/DST.
@@ -538,3 +547,165 @@ Only the nine files listed in the Mac diff above are included in the native
 follow-up. Existing changes, worktrees, stashes, Metro, production PersonalOS and
 both Health test apps were preserved. Publication keeps PR #7 draft; no merge is
 part of this work.
+
+## Positive all-day interval correction (uncommitted Mac follow-up)
+
+An isolated iOS 27 Simulator EventKit round trip reproduced positive all-day
+intervals whose endpoints share a civil date, with a day-boundary start and a
+non-boundary end. The original projection rejected those intervals. The adapter
+passes EKEvent endpoints through directly; no earlier rounding or zone conversion
+caused the rejection. The corrected projection ceilings only a non-boundary end
+and leaves an already-exclusive boundary unchanged. It also preserves the final
+included day of a multi-day interval instead of flooring that day away.
+
+The standalone helper initially failed UIKit's scene-lifecycle requirement before
+any helper fixtures were saved. That helper defect was corrected separately; it
+is not Calendar-feature evidence. Its subsequent 20 synthetic round-trip fixtures
+covered same-day, boundary-authored, multi-day and recurring cases in UTC and DST
+contexts. A read-only probe of those existing fixtures found candidate membership
+consistent with EventKit day queries. Boundary-authored fixture names describe
+inputs; EventKit may normalize them, so preservation of genuinely boundary-ending
+raw intervals is independently covered by pure native tests.
+
+Native regression tests cover membership equivalence to raw overlap, exact boundary
+preservation, same-day/non-midnight and multi-day intervals, DST both ways, half-hour
+DST, midnight gaps, skipped dates, recurrence identity, deduplication/conflicts and
+invalid/zero/reversed inputs. No TypeScript wire-shape, permission, timeout, storage,
+Health or Reminders changes. Diagnostic builds remain separate and unchanged.
+
+User-reported phone categories are separate evidence and establish neither exact
+endpoint values nor provider-wide semantics. At that checkpoint no corrected feature build had been
+installed or exercised on the phone; the later build-4 report below supersedes
+that historical status. Simulator local-store results do not establish
+all account/provider behaviour. Existing silent-empty-array, timeout/gate and
+next-refresh time-zone limitations remain in force.
+
+## Build-4 device observations — user-confirmed, reported 2026-10-31
+
+These are user reports about installed build 4, separate from automated evidence.
+No event contents or device screenshots are recorded.
+
+- Calendar loaded events without the previous error. All-day entries and displayed
+  timed-event times matched Apple Calendar.
+- Manual Refresh retained correct entries. Back to Today → Calendar reopened
+  correctly; a cold relaunch also loaded Calendar correctly. Refresh/reopening
+  produced no unexpected permission prompts.
+- After access was disabled in Settings, returning landed on Today. No cause for
+  that navigation is inferred. Opening Calendar showed access-off guidance and
+  the Settings button, cleared previous event rows, and showed no new prompt.
+- At maximum accessibility text size, the access-off message and Settings button
+  remained readable and reachable by scrolling.
+- The user re-enabled Calendar access and checked populated entries. Content
+  remained readable in light and dark appearance.
+- VoiceOver traversal had no reported navigation issues; event labels were
+  announced and content remained reachable while scrolling. Back to Today worked.
+  The user restored their usual VoiceOver setting. Time-range wording was
+  insufficiently clear; feedback requested explicit “from … to …” wording.
+- With Airplane Mode enabled and Wi-Fi off, locally available events remained
+  visible and Refresh succeeded without errors or unexpected permission prompts.
+  Connectivity was restored.
+
+Calendar access was last reported enabled. Text-size and appearance restoration
+were not separately confirmed. These observations do not establish full
+accessibility certification, cloud-sync validation, live midnight/time-zone
+transition coverage or provider-wide correctness.
+
+## Presentation follow-up after build 4 — historical pre-device checkpoint
+
+The shared presentation formatter uses the snapshot's display time zone and the
+existing default Intl locale/hour cycle. Timed endpoints on the same displayed
+local date show that date once, followed by the time range; multi-day endpoints
+retain both dates and times, including a timed end exactly at midnight.
+The single grouped event accessibility label uses explicit “from … to …” wording
+with the same formatted endpoints. Child text does not add separate labels.
+All-day rows retain “All day”; their native civil spans remain unchanged and the
+exclusive `endsBefore` value is never displayed as an extra included day.
+
+Only presentation and synthetic tests change. No membership, native conversion,
+occurrence identity, ordering, permissions, refresh, storage or dependencies change.
+The build-4 installed app/bundle does not contain this new visible/spoken copy.
+Validation and the then-pending device check are recorded below. The later build-5
+user report supersedes the pre-device status, within its stated limits.
+
+### Presentation validation — 2026-10-31
+
+- Affected Jest: `npm test -- --runInBand --watchman=false CalendarScreen
+NativeCalendar formatCalendarEventTime App.test` — **4 suites / 134 tests passed**.
+  Includes 13 formatter cases and populated large-text renderer coverage in both
+  appearances. Cases cover same/multiple displayed dates, exact midnight ends,
+  midnight starts, point events, year boundaries, non-hour zones, UTC/display-zone
+  date disagreement, DST fallback, unchanged all-day spans and explicit spoken ranges.
+- TypeScript: `tsc --noEmit` — passed. ESLint: `npm run lint -- --max-warnings=0`
+  — passed. Prettier checks cover all four changed TypeScript files and both updated
+  Markdown files; blank-line formatting was tidied. `git diff --check` — passed.
+- Build-4 source-manifest comparison: only the screen, screen tests and Calendar
+  documentation differ among previously tracked files; two new formatter/test files
+  are added. All native files, dependencies and other manifest files still match.
+  Reuse the recorded **701 native assertions** and native build/Simulator evidence;
+  no native test/build rerun and no new release or bundled-JS validation is claimed.
+- No new Simulator layout run: existing layout/styles are unchanged and no app
+  installation was performed. Renderer tests establish scroll/scaling configuration,
+  not physical layout, focus behaviour or spoken iOS VoiceOver output.
+
+At this historical checkpoint, the smallest pending device check after an
+authorized candidate build and installation was: inspect one same-day timed range (date once), one multi-day timed
+range (both dates/times), and an all-day row (“All day”, no extra day). Listen to
+one grouped announcement per row: timed ranges should clearly say “from … to …”
+without duplicate child announcements. At large text size, confirm wrapping and
+scroll reachability for those rows. Do not record event contents. At that checkpoint the follow-up
+copy had not yet been device tested; build-4 results could not validate it. See the
+separate build-5 report below for the subsequent user-confirmed observations.
+
+No phone launch/install, Calendar-data read, permission request, commit, push or
+merge was performed in this follow-up. Metro and installed apps were untouched;
+PR #7 remains draft with no remote changes. Existing provider, silent-empty-array,
+timeout/non-cancellation and next-refresh-zone limitations still apply.
+
+## Build-5 device observations — user-confirmed, reported 2026-10-31
+
+These observations are the user's final build-5 feedback, separate from automated
+checks, installation/launch receipts and earlier build-4 results. No event contents
+or screenshots are recorded.
+
+- Same-day timed events display one date and both times correctly.
+- Multi-day timed events display both dates and times clearly.
+- VoiceOver explicitly announces “from … to …”. Multi-day announcements include
+  both dates, and rows have no duplicate spoken wording.
+- All-day wording remains clear. The user did not separately confirm absence of
+  an extra displayed day in this final check; do not infer that confirmation from
+  clear wording or from earlier build-4 observations.
+- At the largest accessibility text size, rows wrap readably and remain reachable
+  by scrolling.
+- Restoration of accessibility settings has not yet been confirmed. The earlier
+  build-4 VoiceOver-restoration report does not establish restoration after this
+  build-5 check.
+
+Existing limits remain: no full accessibility certification, cloud-sync validation,
+live midnight/time-zone transition coverage or provider-wide correctness is claimed.
+EventKit silent empty arrays, timeout/non-cancellation and next-refresh time-zone
+behaviour remain unchanged. Native and formatter tests cover exclusive-end policy;
+that automated evidence is distinct from the narrower final all-day user report.
+Calendar access was last reported enabled; no new permission-state or restoration
+claim is inferred. Appearance restoration is also not separately confirmed.
+
+### Review and provenance after build-5 feedback
+
+Before this documentation update, every file in build 5's preserved source manifest
+and the complete seven-file outstanding patch matched exactly. Preserved build-5
+patch SHA-256: `a8df75f41cba9041d3b18fec7326dafa1e331bc3b085fc95d726e245cd109221`.
+After recording feedback, only `docs/CALENDAR.md` differs from that source manifest;
+all implementation and test files remain byte-identical to build 5. Original source
+patch/manifests and build evidence are preserved, not rewritten to include feedback.
+
+Review of the native correction, presentation, tests and documentation found no
+concrete code issue requiring a fix. Same-day comparison uses the snapshot display
+zone; multi-day ranges retain both dates/times; native all-day boundary ends remain
+exclusive without an added day; each row has one grouped spoken label. Membership,
+occurrence identity, ordering, permissions, refresh and storage remain unchanged
+by the presentation work.
+
+This turn changes documentation only. Documentation formatting and whitespace
+checks passed; unchanged tests, builds and device checks are not repeated.
+The existing 701 native assertions, 134 affected Jest tests, TypeScript/lint checks
+and build-5 artifact verification remain the applicable automated evidence. Device
+feedback above is user-confirmed evidence, not a new automated check.
