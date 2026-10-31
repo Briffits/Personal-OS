@@ -6,6 +6,7 @@ import BottomNavigation, {
   type AppTab,
 } from './src/components/BottomNavigation';
 import HealthMedicationsScreen from './src/screens/HealthMedicationsScreen';
+import CalendarScreen from './src/screens/CalendarScreen';
 import LibraryScreen from './src/screens/LibraryScreen';
 import MedicationScreen from './src/screens/MedicationScreen';
 import PrescriptionWalletScreen from './src/screens/PrescriptionWalletScreen';
@@ -21,6 +22,7 @@ type AppScreen =
   | 'prescriptionWallet'
   | 'settings'
   | 'reminders'
+  | 'calendar'
   | 'healthMedications';
 
 function App() {
@@ -34,6 +36,9 @@ function App() {
   };
 
   const renderScreen = () => {
+    if (activeScreen === 'calendar') {
+      return <CalendarScreen onBack={() => setActiveScreen('main')} />;
+    }
     if (activeScreen === 'healthMedications') {
       return <HealthMedicationsScreen onBack={() => setActiveScreen('main')} />;
     }
@@ -79,6 +84,7 @@ function App() {
           <TodayScreen
             onOpenSettings={() => setActiveScreen('settings')}
             onOpenReminders={() => setActiveScreen('reminders')}
+            onOpenCalendar={() => setActiveScreen('calendar')}
           />
         );
     }
